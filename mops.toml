@@ -7,7 +7,7 @@ keywords = [ "bitcoin" ]
 license = "Apache-2.0"
 
 [dependencies]
-core = "2.4.0"
+core = "2.5.0"
 sha2 = "0.1.14"
 
 [dev-dependencies]
@@ -16,5 +16,5 @@ bench-helper = "0.0.3"
 
 [toolchain]
 wasmtime = "43.0.1"
-moc = "1.5.0"
+moc = "1.7.0"
 pocket-ic = "9.0.3"
