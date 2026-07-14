@@ -23,10 +23,7 @@ let runTest = TestUtils.runTestWithDefaults;
 func getSecp256k1Point(coords : ?(Nat, Nat)) : Jacobi.Point {
   switch (coords) {
     case (?(x, y)) {
-      switch (Jacobi.fromNat(x, y, 1, Curves.secp256k1)) {
-        case (null) Runtime.trap("unreachable");
-        case (?point) point;
-      };
+      Jacobi.fromNat(x, y, 1, Curves.secp256k1);
     };
     case (null) #infinity(Curves.secp256k1);
   };

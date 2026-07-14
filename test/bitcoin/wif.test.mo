@@ -92,6 +92,38 @@ let invalidWifTestCases : [InvalidWifTestCase] = [
   },
 ];
 
+// Vectors that exercise the secp256k1 private-scalar guard
+// (`privateKey == 0` or `privateKey >= Curves.secp256k1.r`). All of
+// these decode to a syntactically valid WIF whose 32-byte payload is
+// either zero or `>= r`, so `Wif.decode` must reject them with the exact
+// error message "Invalid private scalar."
+type InvalidScalarWifTestCase = {
+  wif : Text;
+};
+
+let invalidScalarWifTestCases : [InvalidScalarWifTestCase] = [
+  {
+    // Zero scalar (mainnet, compressed).
+    wif = "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgd9M7rFU73Nd2Mcv1";
+  },
+  {
+    // Zero scalar (mainnet, uncompressed).
+    wif = "5HpHagT65TZzG1PH3CSu63k8DbpvD8s5ip4nEB3kEsreAbuatmU";
+  },
+  {
+    // Zero scalar (testnet, compressed).
+    wif = "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN87J7g8rY9t";
+  },
+  {
+    // Scalar equal to secp256k1 group order r (mainnet, compressed).
+    wif = "L5oLkpV3aqBjhki6LmvChTCV6odsp4SXM6FfU2Gppt5kFqRzExJJ";
+  },
+  {
+    // Scalar equal to r + 1 (mainnet, uncompressed).
+    wif = "5Km2kuu7vtFDPpxywn4u3NLpbr5jKpTB3jsuDU2KYEqetyuszSh";
+  },
+];
+
 func testValidWifDecode(tcase : ValidWifTestCase) {
   switch (Wif.decode(tcase.wif)) {
     case (#ok(privateKey)) {
@@ -115,6 +147,17 @@ func testInvalidWifDecode(tcase : InvalidWifTestCase) {
   };
 };
 
+func testInvalidScalarWifDecode(tcase : InvalidScalarWifTestCase) {
+  switch (Wif.decode(tcase.wif)) {
+    case (#err(msg)) {
+      assert (msg == "Invalid private scalar.");
+    };
+    case (#ok(_privateKey)) {
+      assert (false);
+    };
+  };
+};
+
 let runTest = TestUtils.runTestWithDefaults;
 
 runTest({
@@ -127,4 +170,10 @@ runTest({
   title = "Decode invalid Wifs";
   fn = testInvalidWifDecode;
   vectors = invalidWifTestCases;
+});
+
+runTest({
+  title = "Decode WIFs with out-of-range private scalar";
+  fn = testInvalidScalarWifDecode;
+  vectors = invalidScalarWifTestCases;
 });

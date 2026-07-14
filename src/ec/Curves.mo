@@ -1,10 +1,16 @@
+/// Elliptic curve parameter definitions.
+///
+/// ```motoko name=import
+/// import Curves "mo:bitcoin/ec/Curves";
+/// ```
+
 import Fp "Fp";
 
 module {
-  // Parameters for the GLV endomorphism `phi(x, y) = (beta * x, y)`, which
-  // satisfies `phi(P) = lambda * P` on the curve. The basis `(a1, b1), (a2, b2)`
-  // is used to decompose a scalar `k mod r` into a pair `(k1, k2)` of roughly
-  // half the bit-length such that `k = k1 + k2 * lambda mod r`.
+  /// Parameters for the GLV endomorphism `phi(x, y) = (beta * x, y)`, which
+  /// satisfies `phi(P) = lambda * P` on the curve. The basis `(a1, b1), (a2, b2)`
+  /// is used to decompose a scalar `k mod r` into a pair `(k1, k2)` of roughly
+  /// half the bit-length such that `k = k1 + k2 * lambda mod r`.
   public type Glv = {
     beta : Nat;
     lambda : Nat;
@@ -14,6 +20,11 @@ module {
     b2 : Int;
   };
 
+  /// Prime-field short Weierstrass curve parameters.
+  ///
+  /// Defines a curve `y^2 = x^3 + a*x + b` over `F_p` with subgroup
+  /// order `r` and generator `(gx, gy)`. `Fp` is a convenience constructor
+  /// for field elements modulo `p`.
   public type Curve = {
     p : Nat;
     // Order (number of points on the curve)
@@ -29,6 +40,7 @@ module {
     glv : ?Glv;
   };
 
+  /// secp256k1 curve definition.
   public let secp256k1 : Curve = {
     p = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
     r = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141;
@@ -49,6 +61,10 @@ module {
     };
   };
 
+  /// Compares two curves by core domain parameters.
+  ///
+  /// Compares `p`, `a`, `b`, `gx`, and `gy`. Does not compare the cofactor
+  /// or the embedded `Fp` constructor function. Never traps.
   public func isEqual(curve1 : Curve, curve2 : Curve) : Bool {
     curve1.p == curve2.p and curve1.a == curve2.a and curve1.b == curve2.b and curve1.gx == curve2.gx and curve1.gy == curve2.gy
   };

@@ -1,3 +1,13 @@
+/// HMAC (Hash-based Message Authentication Code) implementation.
+///
+/// Supports HMAC-SHA256 and HMAC-SHA512, used in BIP32 key derivation
+/// and other Bitcoin cryptographic operations.
+///
+/// Import from the bitcoin package to use this module.
+/// ```motoko name=import
+/// import Hmac "mo:bitcoin/Hmac";
+/// ```
+
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 
@@ -5,21 +15,30 @@ import Sha256 "mo:sha2/Sha256";
 import Sha512 "mo:sha2/Sha512";
 
 module {
+  /// Interface for an incremental hash digest.
+  ///
+  /// Allows writing data in chunks and retrieving the final hash.
   public type Digest = {
     writeArray : ([Nat8]) -> ();
     sum : () -> Blob;
   };
 
+  /// Factory for creating `Digest` instances of a specific hash function.
+  ///
+  /// `blockSize` is the internal block size in bytes (64 for SHA256, 128 for SHA512).
+  /// `create` returns a fresh `Digest` instance.
   public type DigestFactory = {
     blockSize : Nat;
     create : () -> Digest;
   };
 
-  // HMAC instance.
-  //
-  // NOTE: An Hmac is one-shot. Calling `sum()` finalizes and consumes the
-  // instance: `closed` is set, and any subsequent call to `sum()` or
-  // `writeArray()` will trap. To compute another HMAC, construct a new Hmac.
+  /// HMAC instance for computing an incremental HMAC.
+  ///
+  /// Allows writing data in chunks and retrieving the final HMAC.
+  ///
+  /// NOTE: An Hmac is one-shot. Calling `sum()` finalizes and consumes the
+  /// instance: `closed` is set, and any subsequent call to `sum()` or
+  /// `writeArray()` will trap. To compute another HMAC, construct a new Hmac.
   public type Hmac = {
     // Append `data` to the message being authenticated. Traps if the Hmac
     // has already been finalized via `sum()`.
@@ -30,20 +49,57 @@ module {
     sum : () -> Blob;
   };
 
-  // Sha256 support.
   object sha256DigestFactory {
     public let blockSize : Nat = 64;
     public func create() : Digest = Sha256.Digest(#sha256);
   };
+  /// Creates an HMAC-SHA256 instance with the given `key`.
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let hmac = Hmac.sha256([0x01, 0x02, 0x03]);
+  /// hmac.writeArray([0x04, 0x05]);
+  /// let result = hmac.sum();
+  /// ```
+  ///
+  /// Never traps. Accepts a `key` of any length, including the empty key.
+  /// `writeArray` and `sum` do not trap on any input, but the instance is
+  /// one-shot: after `sum()` locks it, further `writeArray`/`sum` calls trap.
+  // Sha256 support.
   public func sha256(key : [Nat8]) : Hmac = HmacImpl(key, sha256DigestFactory);
 
-  // Sha512 support.
   object sha512DigestFactory {
     public let blockSize : Nat = 128;
     public func create() : Digest = Sha512.Digest(#sha512);
   };
+  /// Creates an HMAC-SHA512 instance with the given `key`.
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let hmac = Hmac.sha512([0x01, 0x02, 0x03]);
+  /// hmac.writeArray([0x04, 0x05]);
+  /// let result = hmac.sum();
+  /// ```
+  ///
+  /// Never traps. Accepts a `key` of any length, including the empty key.
+  /// `writeArray` and `sum` do not trap on any input, but the instance is
+  /// one-shot: after `sum()` locks it, further `writeArray`/`sum` calls trap.
+  // Sha512 support.
   public func sha512(key : [Nat8]) : Hmac = HmacImpl(key, sha512DigestFactory);
 
+  /// Creates an HMAC instance using a custom digest factory.
+  ///
+  /// Use this when neither SHA256 nor SHA512 matches your needs.
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// // Use a custom digest factory
+  /// // let hmac = Hmac.new(key, myFactory);
+  /// ```
+  ///
+  /// Never traps as long as the supplied `digestFactory` itself is total.
+  /// Trap behavior of `writeArray` and `sum` on the returned instance is
+  /// inherited from the digest implementation.
   // Construct HMAC from an arbitrary digest function.
   public func new(key : [Nat8], digestFactory : DigestFactory) : Hmac {
     HmacImpl(key, digestFactory);

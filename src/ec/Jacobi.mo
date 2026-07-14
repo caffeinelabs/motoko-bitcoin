@@ -1,3 +1,12 @@
+/// Jacobian-coordinate elliptic curve operations.
+///
+/// Intended for public-data operations only; not constant-time for secret
+/// inputs.
+///
+/// ```motoko name=import
+/// import Jacobi "mo:bitcoin/ec/Jacobi";
+/// ```
+
 // EC operations using Jacobian coordinates.
 //
 // This implementation is intended for use within Internet Computer canisters
@@ -18,11 +27,13 @@ import Numbers "Numbers";
 module {
   type Fp = BaseFp.Fp;
 
+  /// Jacobian point representation.
   public type Point = {
     #infinity : Curves.Curve;
     #point : (Fp, Fp, Fp, Curves.Curve);
   };
 
+  /// Decodes SEC1 bytes into a Jacobian point on `curve`.
   // Deserialize given data into a point on the given curve. This supports
   // compressed and uncompressed SEC-1 formats.
   // Returns null if data is not in correct format, data size is not exactly
@@ -36,17 +47,17 @@ module {
     };
   };
 
-  // Serialize given point to bytes in SEC-1 format.
+  /// Encodes a Jacobian point into SEC1 bytes.
   public func toBytes(point : Point, compressed : Bool) : [Nat8] {
     Affine.toBytes(toAffine(point), compressed);
   };
 
-  // Check if the given point is valid.
+  /// Checks whether a Jacobian point lies on its curve.
   public func isOnCurve(point : Point) : Bool {
     Affine.isOnCurve(toAffine(point));
   };
 
-  // Convert given point from affine coordinates to jacobi coordinates
+  /// Converts an affine point to Jacobian coordinates.
   public func fromAffine(point : Affine.Point) : Point {
     switch point {
       case (#infinity(curve)) #infinity(curve);
@@ -54,18 +65,17 @@ module {
     };
   };
 
-  // Create a jacobi point from the given coordinates.
-  // Returns null if the point is not valid.
-  public func fromNat(x : Nat, y : Nat, z : Nat, curve : Curves.Curve) : ?Point {
-    ?(#point(curve.Fp(x), curve.Fp(y), curve.Fp(z), curve));
+  /// Creates a Jacobian point from raw coordinates.
+  public func fromNat(x : Nat, y : Nat, z : Nat, curve : Curves.Curve) : Point {
+    #point(curve.Fp(x), curve.Fp(y), curve.Fp(z), curve);
   };
 
-  // Return the base point of the given curve.
+  /// Returns the generator point for `curve`.
   public func base(curve : Curves.Curve) : Point {
     #point(curve.Fp(curve.gx), curve.Fp(curve.gy), curve.Fp(1), curve);
   };
 
-  // Check if the two given jacobi points are equal.
+  /// Compares two Jacobian points for equality.
   public func isEqual(point1 : Point, point2 : Point) : Bool {
     switch (normalizeInfinity(point1), normalizeInfinity(point2)) {
       case (#infinity(curve1), #infinity(curve2)) {
@@ -85,7 +95,7 @@ module {
     };
   };
 
-  // Check if the given point is the point at infinity.
+  /// Returns true if `point` is at infinity.
   public func isInfinity(point : Point) : Bool {
     switch point {
       case (#infinity(_)) true;
@@ -93,7 +103,7 @@ module {
     };
   };
 
-  // Convert the given jacobi point to affine.
+  /// Converts a Jacobian point to affine coordinates.
   public func toAffine(point : Point) : Affine.Point {
     let scaledPoint = scale(point);
     switch scaledPoint {
@@ -102,7 +112,7 @@ module {
     };
   };
 
-  // Invert the given point on the x-axis.
+  /// Negates a point.
   public func neg(point : Point) : Point {
     switch (normalizeInfinity(point)) {
       case (#infinity(curve)) #infinity(curve);
@@ -110,7 +120,7 @@ module {
     };
   };
 
-  // Normalize the given point such that z = 1.
+  /// Normalizes a Jacobian point so that `z = 1`.
   public func scale(point : Point) : Point {
     switch (normalizeInfinity(point)) {
       case (#infinity(curve)) #infinity(curve);
@@ -131,7 +141,7 @@ module {
     };
   };
 
-  // Return double of the given point.
+  /// Returns point doubling result.
   public func double(point : Point) : Point {
     switch (normalizeInfinity(point)) {
       case (#infinity(curve)) #infinity(curve);
@@ -147,7 +157,7 @@ module {
     };
   };
 
-  // Multiply the given point by the given scalar value.
+  /// Multiplies a point by scalar `other`.
   public func mul(point : Point, other : Nat) : Point {
     if (other == 0) {
       return #infinity(getCurve(point));
@@ -189,13 +199,13 @@ module {
     };
   };
 
-  // Scalar multiplication using the GLV endomorphism. Decomposes the scalar
-  // `k mod r` into `(k1, k2)` such that `k1 + lambda * k2 == k (mod r)` and
-  // both halves are roughly half the bit-length of `r`. Then computes
-  // `k1 * P + k2 * phi(P)` with a Straus/Shamir-style interleaved-NAF loop,
-  // where `phi(X, Y, Z) = (beta * X, Y, Z)` in Jacobian coordinates.
-  // Caller guarantees `(x, y)` is the affine representation (Z=1) of P and
-  // that `scalar != 0`.
+  /// Scalar multiplication using the GLV endomorphism. Decomposes the scalar
+  /// `k mod r` into `(k1, k2)` such that `k1 + lambda * k2 == k (mod r)` and
+  /// both halves are roughly half the bit-length of `r`. Then computes
+  /// `k1 * P + k2 * phi(P)` with a Straus/Shamir-style interleaved-NAF loop,
+  /// where `phi(X, Y, Z) = (beta * X, Y, Z)` in Jacobian coordinates.
+  /// Caller guarantees `(x, y)` is the affine representation (Z=1) of P and
+  /// that `scalar != 0`.
   func mulGlv(
     x : Fp,
     y : Fp,
@@ -260,12 +270,16 @@ module {
     #point(fpFromInt(p.0, curve), fpFromInt(p.1, curve), fpFromInt(p.2, curve), curve);
   };
 
-  // Multiply the base point of the given curve by the given scalar value.
+  /// Multiplies the curve generator by scalar `other`.
   public func mulBase(other : Nat, curve : Curves.Curve) : Point {
     mul(base(curve), other);
   };
 
-  // Add the given two points.
+  /// Adds two Jacobian points.
+  ///
+  /// Traps with `"Cannot add two points on different curves"` when
+  /// `point1` and `point2` belong to different curves. Otherwise never
+  /// traps; identity, doubling, and infinity cases are handled.
   public func add(point1 : Point, point2 : Point) : Point {
     if (not Curves.isEqual(getCurve(point1), getCurve(point2))) {
       Runtime.trap("Cannot add two points on different curves");

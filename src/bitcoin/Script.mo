@@ -1,3 +1,9 @@
+/// Bitcoin Script instruction and serialization utilities.
+///
+/// ```motoko name=import
+/// import Script "mo:bitcoin/bitcoin/Script";
+/// ```
+
 import Array "mo:core/Array";
 import List "mo:core/List";
 import Nat16 "mo:core/Nat16";
@@ -16,6 +22,7 @@ module Script {
   let maxNat32 = 0xffffffff;
   // Full set of opcodes from Bitcoin Core 23.0.
   // Not all opcodes are supported: see encodeOpcode and decodeOpcode.
+  /// Script opcode variants.
   public type Opcode = {
     #OP_0;
     #OP_FALSE;
@@ -157,12 +164,19 @@ module Script {
   };
 
   // An instruction is either an opcode or data.
+  /// A single script instruction: either an opcode or a data push.
+  ///
+  /// `#opcode(op)` represents one of the script opcodes.
+  /// `#data(bytes)` represents a push of `bytes` onto the stack; the
+  /// appropriate `OP_PUSHBYTES_N` / `OP_PUSHDATA{1,2,4}` prefix is
+  /// emitted automatically when serializing.
   public type Instruction = {
     #opcode : Opcode;
     #data : [Nat8];
   };
 
   // A script is an array of instructions.
+  /// Script program as a sequence of instructions.
   public type Script = [Instruction];
 
   // Convert given opcode to its byte representation.
@@ -489,6 +503,22 @@ module Script {
   // script size from data. Reading size is required when deserializing scripts
   // that were serialized as part of transactions. If readSize is false, will
   // read all bytes in data.
+  /// Parses a serialized script from `data`.
+  ///
+  /// When `readSize` is true, this function first reads a varint-prefixed
+  /// script length and stops after that many bytes. When `readSize` is false,
+  /// the iterator is consumed to exhaustion.
+  ///
+  /// Never traps. Returns `#err(message)` with one of:
+  /// - `"Could not read size."` — `readSize` is `true` but the leading
+  ///   varint cannot be read.
+  /// - `"Could not decode opcode: N"` — the byte `N` is not in the
+  ///   supported subset of opcodes recognised by `decodeOpcode`.
+  /// - `"Error docoding instruction."` — the iterator was exhausted while
+  ///   reading the data payload of an `OP_PUSHDATA*` or short-push
+  ///   instruction (note the typo, preserved for compatibility).
+  /// - `"Truncated script."` — `readSize` is `true` and the iterator was
+  ///   exhausted before the declared script length had been consumed.
   public func fromBytes(data : Iter<Nat8>, readSize : Bool) : Result<Script, Text> {
     let size = if (readSize) {
       switch (ByteUtils.readVarint(data)) {
@@ -581,6 +611,10 @@ module Script {
   };
 
   // Serialize given script to bytes.
+  /// Serializes a script to bytes using Bitcoin script encoding rules.
+  ///
+  /// Traps with `"Data too long to encode."` if any `#data` element is
+  /// larger than `2^32 - 1` bytes (the maximum supported by `OP_PUSHDATA4`).
   public func toBytes(script : Script) : [Nat8] {
     let buf = List.empty<Nat8>();
     let opPushData1 : Nat = encodeOpcode(#OP_PUSHDATA1).toNat();

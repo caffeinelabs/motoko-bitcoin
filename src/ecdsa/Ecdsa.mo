@@ -1,3 +1,9 @@
+/// ECDSA signature verification utilities.
+///
+/// ```motoko name=import
+/// import Ecdsa "mo:bitcoin/ecdsa/Ecdsa";
+/// ```
+
 import Blob "mo:core/Blob";
 
 import Sha256 "mo:sha2/Sha256";
@@ -8,10 +14,23 @@ import Jacobi "../ec/Jacobi";
 import Types "Types";
 
 module {
+  /// ECDSA signature type re-export.
   public type Signature = Types.Signature;
+  /// ECDSA public key type re-export.
   public type PublicKey = Types.PublicKey;
 
   // Verify ECDSA signature using SHA256 as a hash function.
+  /// Verifies an ECDSA signature for `message` using SHA-256 prehashing.
+  ///
+  /// Never traps. Returns `false` when:
+  /// - `signature.r == 0` or `signature.s == 0`,
+  /// - `signature.r >= curve.r` or `signature.s >= curve.r`,
+  /// - the recovered point is at infinity, or its `x` coordinate (mod
+  ///   `curve.r`) does not equal `signature.r`.
+  ///
+  /// Returns `true` only when the signature is valid for `message` under
+  /// `publicKey`. The `publicKey` is assumed to have been validated by
+  /// `Publickey.decode` (on-curve, not at infinity).
   public func verify(
     signature : Signature,
     publicKey : PublicKey,

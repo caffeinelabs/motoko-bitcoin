@@ -1,3 +1,10 @@
+/// DER encoding and decoding for ECDSA signatures.
+///
+/// ```motoko name=import
+/// import Der "mo:bitcoin/ecdsa/Der";
+/// ```
+
+import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import List "mo:core/List";
 import Nat "mo:core/Nat";
@@ -90,9 +97,13 @@ module {
       output.add(i);
     };
 
-    Blob.fromArray(output.toArray());
+    output.toArray().toBlob();
   };
 
+  /// Encodes a raw `(r || s)` 64-byte signature into DER.
+  ///
+  /// Traps when `signature.size() < 64` (out-of-bounds copy of the raw
+  /// `r`/`s` bytes).
   // Accepts a Blob containing the concatenation of the 32-byte big endian
   // encodings of the two values r and s of the signature.
   // Outputs DER encoding of the signature:
@@ -107,6 +118,26 @@ module {
     _encodeSignature(rdata.toArray(), sdata.toArray());
   };
 
+  /// Decodes a DER-encoded ECDSA signature into `(r, s)`.
+  ///
+  /// Never traps. Returns `#err(message)` when the DER structure is
+  /// malformed:
+  /// - `"Could not parse signature."` — missing `0x30` SEQUENCE tag,
+  ///   missing total length, missing `0x02` INTEGER tag for `r`, or
+  ///   missing `r` length.
+  /// - `"Could not parse r sequence."` — truncated `r` payload, missing
+  ///   `0x02` INTEGER tag for `s`, or missing `s` length.
+  /// - `"Could not parse s sequence."` — truncated `s` payload.
+  /// - `"Invalid r size."` — `r` is empty or longer than 33 bytes.
+  /// - `"Invalid s size."` — `s` is empty or longer than 33 bytes.
+  /// - `"r value cannot be negative."` — `r` is 33 bytes but the leading
+  ///   byte is not `0x00`.
+  /// - `"s value cannot be negative."` — `s` is 33 bytes but the leading
+  ///   byte is not `0x00`.
+  /// - `"Wrong total length"` — declared total length does not match
+  ///   `rLen + sLen + 4`.
+  /// - `"Did not consume all data"` — trailing bytes after the declared
+  ///   structure.
   // Decode signature in DER format.
   // 0x30 [total-length] 0x02 [R-length] [R] 0x02 [S-length] [S]
   public func decodeSignature(signature : DerSignature) : Result<Signature, Text> {

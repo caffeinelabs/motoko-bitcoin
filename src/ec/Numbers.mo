@@ -1,8 +1,17 @@
+/// Number theory helpers used by elliptic curve routines.
+///
+/// ```motoko name=import
+/// import Numbers "mo:bitcoin/ec/Numbers";
+/// ```
+
 import Array "mo:core/Array";
 import List "mo:core/List";
 
 module {
   // Extended Euclidean Algorithm.
+  /// Computes `(gcd, x, y)` such that `a*x + b*y = gcd`.
+  ///
+  /// Never traps. Returns `(a, 1, 0)` when `b == 0`.
   public func eea(a : Int, b : Int) : (Int, Int, Int) {
     if (b == 0) {
       return (a, 1, 0);
@@ -13,6 +22,9 @@ module {
 
   // Convert given number to binary represented as an array of Bool in reverse
   // order.
+  /// Converts `a` to reversed bit order (least significant bit first).
+  ///
+  /// Returns the empty array `[]` when `a == 0`. Never traps.
   public func toBinaryReversed(a : Nat) : [Bool] {
     let bitsBuffer = List.empty<Bool>();
     var number : Nat = a;
@@ -26,6 +38,9 @@ module {
   };
 
   // Convert given number to binary represented as an array of Bool.
+  /// Converts `a` to bit array (most significant bit first).
+  ///
+  /// Returns the empty array `[]` when `a == 0`. Never traps.
   public func toBinary(a : Nat) : [Bool] {
     let reversedBinary = toBinaryReversed(a);
     Array.tabulate<Bool>(
@@ -37,6 +52,15 @@ module {
   };
 
   // Compute the Non-adjacent form representiation of the given integer.
+  /// Computes the non-adjacent form (NAF) digits of `n`.
+  ///
+  /// NAF is a signed binary representation where each digit is in
+  /// `{-1, 0, 1}` and no two consecutive digits are non-zero. It is used
+  /// to speed up scalar multiplication on elliptic curves by reducing the
+  /// number of point additions.
+  ///
+  /// The result is least-significant-digit first. Returns the empty array
+  /// `[]` when `n == 0`. Never traps.
   public func toNaf(n : Int) : [Int] {
     var input : Int = n;
     let output = List.empty<Int>();

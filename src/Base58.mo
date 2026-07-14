@@ -1,3 +1,14 @@
+/// Base58 encoding and decoding for binary data.
+///
+/// Base58 is a binary-to-text encoding used in Bitcoin to encode addresses
+/// and other data. It uses 58 alphanumeric characters, excluding visually
+/// ambiguous characters such as `0`, `I`, `O`, and `l`.
+///
+/// Import from the bitcoin package to use this module.
+/// ```motoko name=import
+/// import Base58 "mo:bitcoin/Base58";
+/// ```
+
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import Nat16 "mo:core/Nat16";
@@ -39,13 +50,94 @@ module {
   ];
 
   func arrayToText(arr : [Nat8]) : Text {
-    switch (Blob.fromArray(arr).decodeUtf8()) {
+    switch (arr.toBlob().decodeUtf8()) {
       case (?t) t;
       case null Runtime.trap("unreachable");
     };
   };
 
-  // Convert the given Base58 input to Base256.
+  /// Returns `true` if `input` consists entirely of characters from the
+  /// Base58 alphabet (`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`),
+  /// optionally surrounded by leading and/or trailing ASCII spaces (`0x20`).
+  ///
+  /// The empty string and a string of only spaces both return `true`
+  /// (consistent with `decode`, which accepts these as the encoding of the
+  /// empty byte array).
+  ///
+  /// Embedded spaces (between Base58 characters) and any character outside
+  /// the alphabet (e.g. `'0'`, `'O'`, `'I'`, `'l'`, non-ASCII bytes) cause
+  /// this function to return `false`.
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let ok = Base58.isBase58Alphabet("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i");
+  /// ```
+  ///
+  /// Never traps.
+  public func isBase58Alphabet(input : Text) : Bool {
+    let bytes : Blob = Text.encodeUtf8(input);
+    let size = bytes.size();
+    var pos : Nat = 0;
+
+    // Skip leading spaces.
+    while (pos < size and bytes[pos] == 0x20) {
+      pos += 1;
+    };
+
+    // Find end of payload (before trailing spaces).
+    var endPos = size;
+    while (endPos > pos and bytes[endPos - 1] == 0x20) {
+      endPos -= 1;
+    };
+
+    // All bytes in [pos, endPos) must map to a Base58 alphabet index.
+    while (pos < endPos) {
+      if (mapBase58[bytes[pos].toNat()] == 255) {
+        return false;
+      };
+      pos += 1;
+    };
+
+    true;
+  };
+
+  /// Decodes a Base58-encoded string to a byte array, returning `null`
+  /// instead of trapping when `input` contains characters outside the
+  /// Base58 alphabet.
+  ///
+  /// Equivalent to checking `isBase58Alphabet(input)` first and then
+  /// calling `decode(input)`. Leading and trailing spaces are accepted (see
+  /// `decode` for the exact semantics).
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let result = Base58.decodeOpt("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i");
+  /// ```
+  ///
+  /// Returns `?bytes` on success and `null` if `input` is not valid in the
+  /// Base58 alphabet. Never traps.
+  public func decodeOpt(input : Text) : ?[Nat8] {
+    if (not isBase58Alphabet(input)) {
+      return null;
+    };
+    ?decode(input);
+  };
+
+  /// Decodes a Base58-encoded string to a byte array.
+  ///
+  /// Leading `'1'` characters in the input are preserved as leading zero bytes
+  /// in the output. Leading and trailing spaces are ignored.
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let bytes = Base58.decode("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i");
+  /// ```
+  ///
+  /// Traps if `input_` contains any byte that is not a leading space, a
+  /// trailing space, or a character in the Base58 alphabet
+  /// (`123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz`). In
+  /// particular, spaces embedded inside the payload, ASCII characters such
+  /// as `'0'`, `'O'`, `'I'`, `'l'`, and any non-ASCII byte all trap.
   public func decode(input_ : Text) : [Nat8] {
     let input : Blob = Text.encodeUtf8(input_);
     let inputSize = input.size();
@@ -154,7 +246,17 @@ module {
     );
   };
 
-  // Convert the given Base256 input to Base58.
+  /// Encodes a byte array as a Base58 string.
+  ///
+  /// Leading zero bytes in the input are preserved as leading `'1'` characters
+  /// in the output.
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let encoded = Base58.encode([0x00, 0x01, 0x02]);
+  /// ```
+  ///
+  /// Never traps. Accepts any byte array, including the empty array.
   public func encode(input : [Nat8]) : Text {
     let inputSize = input.size();
     var length : Nat = 0;

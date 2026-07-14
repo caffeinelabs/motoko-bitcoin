@@ -169,3 +169,63 @@ test(
     };
   },
 );
+
+test(
+  "isBase58Alphabet accepts valid alphabet",
+  func() {
+    assert (Base58.isBase58Alphabet(""));
+    assert (Base58.isBase58Alphabet("   "));
+    assert (Base58.isBase58Alphabet("1"));
+    assert (Base58.isBase58Alphabet("2g"));
+    assert (Base58.isBase58Alphabet("a3gV"));
+    assert (Base58.isBase58Alphabet("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i"));
+    // Leading/trailing spaces are allowed.
+    assert (Base58.isBase58Alphabet("  1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i"));
+    assert (Base58.isBase58Alphabet("1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i  "));
+    assert (Base58.isBase58Alphabet(" 1AGNa15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i "));
+  },
+);
+
+test(
+  "isBase58Alphabet rejects invalid characters",
+  func() {
+    // Each of the four characters explicitly excluded from the alphabet.
+    assert (not Base58.isBase58Alphabet("0"));
+    assert (not Base58.isBase58Alphabet("O"));
+    assert (not Base58.isBase58Alphabet("I"));
+    assert (not Base58.isBase58Alphabet("l"));
+    // Embedded space is not allowed.
+    assert (not Base58.isBase58Alphabet("1AGN 15ZQXAZUgFiqJ2i7Z2DPU2J6hW62i"));
+    // Other punctuation / non-alphabet ASCII.
+    assert (not Base58.isBase58Alphabet("hello!"));
+    assert (not Base58.isBase58Alphabet("1+2"));
+    // Non-ASCII bytes (UTF-8 encoded multibyte).
+    assert (not Base58.isBase58Alphabet("é"));
+  },
+);
+
+test(
+  "decodeOpt returns ?bytes for valid input",
+  func() {
+    for (i in Nat.range(0, testData.size())) {
+      let input = testData[i].1;
+      let expected = testData[i].0;
+      switch (Base58.decodeOpt(input)) {
+        case (?actual) { assert (expected == actual) };
+        case null { assert false };
+      };
+    };
+  },
+);
+
+test(
+  "decodeOpt returns null for invalid alphabet",
+  func() {
+    assert (Base58.decodeOpt("0") == null);
+    assert (Base58.decodeOpt("O") == null);
+    assert (Base58.decodeOpt("I") == null);
+    assert (Base58.decodeOpt("l") == null);
+    assert (Base58.decodeOpt("1MmqjDhakEfJd9r5BoDhPApCpA75Em17G0") == null);
+    assert (Base58.decodeOpt("hello!") == null);
+  },
+);

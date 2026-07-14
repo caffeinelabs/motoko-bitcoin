@@ -1,3 +1,9 @@
+/// Bitcoin transaction parsing, serialization, and signature hash helpers.
+///
+/// ```motoko name=import
+/// import Transaction "mo:bitcoin/bitcoin/Transaction";
+/// ```
+
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import List "mo:core/List";
@@ -19,9 +25,23 @@ import Types "Types";
 import Witness "Witness";
 
 module {
-  // Deserialize transaction from data with the following layout:
-  // | version | maybe witness flags | len(txIns) | txIns | len(txOuts) | txOuts
-  // | locktime | witness if witness flags present |
+  /// Deserializes a transaction from raw bytes.
+  ///
+  /// Supports both legacy and witness transaction layouts.
+  ///
+  /// Never traps. Returns `#err(message)` when the byte stream is
+  /// malformed (e.g. truncated header, invalid varint sizes, malformed
+  /// inputs, outputs, witnesses or scripts). Specific messages include
+  /// `"Could not read version."`, `"Invalid witness flag."`,
+  /// `"Could not read TxInputs size in a transaction with witness."`,
+  /// `"Could not read TxInputs size in a transaction without witness."`,
+  /// `"Could not deserialize TxInput: <message>"`,
+  /// `"Could not read TxOutputs size."`,
+  /// `"Could not deserialize TxOutput: <message>"`,
+  /// `"Could not deserialize Witness: <message>"`,
+  /// `"Could not read locktime."`,
+  /// and errors propagated from `TxInput.fromBytes`, `TxOutput.fromBytes`,
+  /// `Witness.fromBytes`, and `Script.fromBytes`.
   public func fromBytes(data : Iter<Nat8>) : Result<Transaction, Text> {
 
     var has_witness = false;
@@ -142,7 +162,17 @@ module {
     );
   };
 
-  // Representation of a Bitcoin transaction.
+  /// Mutable Bitcoin transaction representation.
+  ///
+  /// Constructor arguments:
+  /// - `version` — transaction format version (typically `1` or `2`).
+  /// - `_txIns` — transaction inputs. The `script` field of each input
+  ///   is mutable and is overwritten by the signing helpers.
+  /// - `_txOuts` — transaction outputs.
+  /// - `_witnesses` — per-input witness stacks, with one entry per input
+  ///   (use `Witness.EMPTY_WITNESS` for inputs without a witness).
+  /// - `locktime` — block height or timestamp before which the
+  ///   transaction is invalid (`0` to disable).
   public class Transaction(
     version : Nat32,
     _txIns : [TxInput.TxInput],
@@ -151,8 +181,11 @@ module {
     locktime : Nat32,
   ) {
 
+    /// Transaction inputs.
     public let txInputs : [TxInput.TxInput] = _txIns;
+    /// Transaction outputs.
     public let txOutputs : [TxOutput.TxOutput] = _txOuts;
+    /// Per-input witness stacks.
     public let witnesses : [var Witness.Witness] = _witnesses;
 
     /// Compute the transaction id by double hashing
@@ -163,6 +196,10 @@ module {
     /// As per
     /// [BIP141](https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki),
     /// the id that includes witness is denoted as wtxid.
+    ///
+    /// Traps if any contained `Script` has a `#data` element larger than
+    /// `2^32 - 1` bytes (inherited from `Script.toBytes`). Otherwise never
+    /// traps.
     public func txid() : [Nat8] {
       let doubleHash : [Nat8] = Hash.doubleSHA256(toBytesIgnoringWitness());
       Array.tabulate<Nat8>(
@@ -173,6 +210,20 @@ module {
       );
     };
 
+    /// Creates the legacy P2PKH signature hash for one input.
+    ///
+    /// Currently supports only `SIGHASH_ALL` semantics. Mutates the
+    /// `script` field of every `txInputs[i]` (clears all of them, then
+    /// installs `scriptPubKey` on the input being signed). Callers should
+    /// not rely on input scripts being preserved across this call.
+    ///
+    /// Traps when:
+    /// - `sigHashType & 0x1f == SIGHASH_SINGLE` (failed assert),
+    /// - `sigHashType & 0x1f == SIGHASH_NONE` (failed assert),
+    /// - `sigHashType & SIGHASH_ANYONECANPAY != 0` (failed assert),
+    /// - `txInputIndex.toNat() >= txInputs.size()` (out-of-bounds index),
+    /// - any contained `Script` has a `#data` element larger than
+    ///   `2^32 - 1` bytes (inherited from `Script.toBytes`).
     // Create a signature hash for the given TxIn index.
     // Only SIGHASH_ALL is currently supported.
     // Output: Signature Hash.
@@ -214,6 +265,11 @@ module {
     /// address and the `txInputIndex` of the input being signed. The full signature
     /// hash computation algorithm is described in
     /// [BIP341](https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki#user-content-Signature_validation_rules).
+    ///
+    /// Traps when:
+    /// - `txInputIndex.toNat() >= txInputs.size()` (out-of-bounds index),
+    /// - any contained `Script` has a `#data` element larger than
+    ///   `2^32 - 1` bytes (inherited from `Script.toBytes`).
     public func createTaprootKeySpendSignatureHash(
       amounts : [Nat64],
       scriptPubKey : Script.Script,
@@ -233,6 +289,11 @@ module {
     /// [BIP342](https://github.com/bitcoin/bips/blob/master/bip-0342.mediawiki).
     ///
     /// This method traps if the `leaf_hash` is not 32 bytes long.
+    /// Also traps when:
+    /// - `txInputIndex.toNat() >= txInputs.size()` (out-of-bounds index),
+    /// - `amounts.size() != txInputs.size()`,
+    /// - any contained `Script` has a `#data` element larger than
+    ///   `2^32 - 1` bytes (inherited from `Script.toBytes`).
     public func createTaprootScriptSpendSignatureHash(
       amounts : [Nat64],
       scriptPubKey : Script.Script,
@@ -346,6 +407,10 @@ module {
 
     /// Serialize transaction to bytes with layout:
     /// `| version | witness flags if it is present | len(txIns) | txIns | len(txOuts) | txOuts | witnesses | locktime |`
+    /// Serializes the transaction including witness (if present).
+    ///
+    /// Traps if any contained `Script` has a `#data` element larger than
+    /// `2^32 - 1` bytes (inherited from `Script.toBytes`).
     public func toBytes() : [Nat8] {
       let has_non_empty_witness = witnesses.toArray().foldLeft<Witness.Witness, Bool>(
         false,
@@ -502,6 +567,10 @@ module {
     /// ignoring the witness. See
     /// [BIP141](https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki)
     /// for more details.
+    /// Serializes the transaction excluding witness data.
+    ///
+    /// Traps if any contained `Script` has a `#data` element larger than
+    /// `2^32 - 1` bytes (inherited from `Script.toBytes`).
     public func toBytesIgnoringWitness() : [Nat8] {
       // Serialize TxInputs to bytes.
       let serializedTxIns : [[Nat8]] = txInputs.map<TxInput.TxInput, [Nat8]>(

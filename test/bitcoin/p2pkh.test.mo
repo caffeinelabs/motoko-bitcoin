@@ -104,3 +104,39 @@ runTest({
   fn = testMakeScript;
   vectors = makeScriptTestCases;
 });
+
+// `P2pkh.decodeAddress` performs an `isBase58Alphabet` pre-check on the
+// input before delegating to `Base58Check.decode`, so an address that
+// contains a character outside the Base58 alphabet (e.g. `0`, `O`, `I`,
+// `l`) is rejected with `#err("Could not base58 decode address.")`.
+type InvalidAlphabetTestCase = {
+  address : Text;
+};
+
+let invalidAlphabetTestCases : [InvalidAlphabetTestCase] = [
+  // Valid mainnet address with one character replaced by '0' (not in alphabet).
+  { address = "0MmqjDhakEfJd9r5BoDhPApCpA75Em17GA" },
+  // Valid mainnet address with one character replaced by 'O' (not in alphabet).
+  { address = "1MmqjDhakEfJd9r5BoDhPApCpA75Em17GO" },
+  // Valid mainnet address with one character replaced by 'l' (not in alphabet).
+  { address = "1MmqjDhakEfJd9r5BoDhPApCpA75Em17Gl" },
+  // Valid mainnet address with one character replaced by 'I' (not in alphabet).
+  { address = "1MmqjDhakEfJd9r5BoDhPApCpA75Em17GI" },
+];
+
+func testP2pkhDecodeAddressInvalidAlphabet(testCase : InvalidAlphabetTestCase) {
+  switch (P2pkh.decodeAddress(testCase.address)) {
+    case (#err msg) {
+      assert (msg == "Could not base58 decode address.");
+    };
+    case (#ok _) {
+      Runtime.trap("Expected #err for address with invalid alphabet character.");
+    };
+  };
+};
+
+runTest({
+  title = "Decode P2PKH address with invalid alphabet character";
+  fn = testP2pkhDecodeAddressInvalidAlphabet;
+  vectors = invalidAlphabetTestCases;
+});

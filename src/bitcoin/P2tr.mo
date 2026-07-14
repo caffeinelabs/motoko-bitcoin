@@ -1,3 +1,9 @@
+/// Taproot (P2TR) address and tweak helpers.
+///
+/// ```motoko name=import
+/// import P2tr "mo:bitcoin/bitcoin/P2tr";
+/// ```
+
 import Array "mo:core/Array";
 import Nat "mo:core/Nat";
 import { type Result } "mo:core/Types";
@@ -18,7 +24,9 @@ module {
   };
   type Script = Script.Script;
 
+  /// P2TR key-path address string alias.
   public type P2trKeyAddress = Types.P2trKeyAddress;
+  /// Decoded P2TR address payload.
   public type DecodedAddress = {
     network : Types.Network;
     publicKeyHash : [Nat8];
@@ -27,6 +35,9 @@ module {
   /// Create script for the given P2TR key spend address (see
   /// [BIP341](https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki)
   /// for more details).
+  ///
+  /// Never traps. Returns `#err(message)` propagated from `Segwit.decode`
+  /// when `address` is not a valid SegWit string.
   public func makeScriptFromP2trKeyAddress(address : P2trKeyAddress) : Result<Script, Text> {
     switch (Segwit.decode(address)) {
       case (#ok(_, { version = _; program })) {
@@ -43,7 +54,11 @@ module {
     };
   };
 
-  // Create script for the given P2TR key spend address.
+  /// Creates a tapscript leaf script from a BIP340 public key.
+  ///
+  /// Never traps. Returns
+  /// `#err("Invalid BIP-340 public key length: expected 32 but got N")`
+  /// when `bip340_spender_public_key.size() != 32`.
   public func leafScript(bip340_spender_public_key : [Nat8]) : Result<Script, Text> {
     if (bip340_spender_public_key.size() != 32) {
       return #err("Invalid BIP-340 public key length: expected 32 but got " # bip340_spender_public_key.size().toText());
@@ -56,6 +71,11 @@ module {
     ]);
   };
 
+  /// Computes the TapLeaf hash for a leaf script.
+  ///
+  /// Traps if any `#data` element of `leaf_script` is larger than `2^32 - 1`
+  /// bytes (inherited from `Script.toBytes`). For scripts produced by this
+  /// module that limit is never reached in practice.
   public func leafHash(leaf_script : Script.Script) : [Nat8] {
     // BIP-342 tapscript
     let TAPROOT_LEAF_TAPSCRIPT : [Nat8] = [0xc0];
@@ -71,6 +91,12 @@ module {
   /// ```
   /// in `taproot_tweak_pubkey` function in
   /// [BIP341](https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki).
+  ///
+  /// Never traps. Returns `#err(message)` when:
+  /// - `internal_key.size() != 32`,
+  /// - `hash.size() != 32`, or
+  /// - the tagged hash interpreted as a big-endian integer is `≥` the
+  ///   secp256k1 field prime (probability under `2^-128`).
   public func tweakFromKeyAndHash(internal_key : [Nat8], hash : [Nat8]) : Result<Fp.Fp, Text> {
     if (internal_key.size() != 32) {
       return #err("Failed to compute tweak, invalid internal key length: expected 32 but got " # internal_key.size().toText());
@@ -83,7 +109,7 @@ module {
     let tweak = Common.readBE256(tagged_hash, 0);
 
     if (tweak >= Curves.secp256k1.p) {
-      return #err("Failed to compute tweak, tweak is not smaller than the curve order");
+      return #err("Failed to compute tweak, tweak is not smaller than the field prime");
     };
 
     #ok(Curves.secp256k1.Fp(tweak));
@@ -99,6 +125,12 @@ module {
   /// ```
   /// `taproot_tweak_pubkey` function in
   /// [BIP341](https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki).
+  ///
+  /// Never traps. Returns `#err("Failed to tweak public key, invalid public key")`
+  /// when `public_key_bip340_bytes` does not encode a valid x-only point on
+  /// secp256k1, or the lifted point is the point at infinity. Returns
+  /// `#err("Tweaking produced an invalid public key")` when the tweaked
+  /// point is at infinity (probability under `2^-128`).
   public func tweakPublicKey(public_key_bip340_bytes : [Nat8], tweak : Fp.Fp) : Result<PublicKey, Text> {
     let even_point_flag : [Nat8] = [0x02];
     let public_key_sec1_bytes = [even_point_flag, public_key_bip340_bytes].flatten();

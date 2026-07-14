@@ -15,6 +15,11 @@ let validChecksumBech32 : [Text] = [
   "11qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqc8247j",
   "split1checkupstagehandshakeupstreamerranterredcaperred2y9e3w",
   "?1ezyfcl",
+  // HRP, separator, and data section all consist solely of numeric
+  // characters (no alphabetic characters anywhere in the string). The
+  // BECH32 standard does not require alphabetic characters; an all-digit
+  // string is unambiguously single-case.
+  "012854464896",
 ];
 
 let validChecksumBech32m : [Text] = [
@@ -25,6 +30,11 @@ let validChecksumBech32m : [Text] = [
   "11llllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllllludsr8",
   "split1checkupstagehandshakeupstreamerranterredcaperredlc445v",
   "?1v759aa",
+  // HRP, separator, and data section all consist solely of numeric
+  // characters (no alphabetic characters anywhere in the string). The
+  // BECH32M standard does not require alphabetic characters; an all-digit
+  // string is unambiguously single-case.
+  "012343952083",
 ];
 
 let invalidChecksumBech32 : [Text] = [

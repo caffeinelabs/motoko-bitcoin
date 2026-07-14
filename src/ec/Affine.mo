@@ -1,3 +1,9 @@
+/// Affine elliptic curve point utilities.
+///
+/// ```motoko name=import
+/// import Affine "mo:bitcoin/ec/Affine";
+/// ```
+
 import VarArray "mo:core/VarArray";
 
 import Common "../Common";
@@ -6,12 +12,15 @@ import FpBase "Fp";
 
 module {
   type Fp = FpBase.Fp;
+  /// Affine point representation.
   public type Point = {
     #infinity : Curves.Curve;
     #point : (Fp, Fp, Curves.Curve);
   };
 
-  // Check if the given point is valid.
+  /// Checks whether a point satisfies the curve equation.
+  ///
+  /// Always returns `true` for `#infinity`. Never traps.
   public func isOnCurve(point : Point) : Bool {
     switch point {
       case (#infinity(_)) {
@@ -27,7 +36,10 @@ module {
     };
   };
 
-  // Check if the two given affine points are equal.
+  /// Compares two affine points for equality.
+  ///
+  /// Two `#infinity` values are equal iff they reference the same curve.
+  /// Cross-variant comparisons return `false`. Never traps.
   public func isEqual(point1 : Point, point2 : Point) : Bool {
     switch (point1, point2) {
       case (#infinity(curve1), #infinity(curve2)) {
@@ -42,6 +54,14 @@ module {
     };
   };
 
+  /// Decodes SEC1 compressed or uncompressed bytes into an affine point.
+  ///
+  /// Never traps. Returns `null` when:
+  /// - `data.size() < 33`,
+  /// - the leading byte is not `0x02`, `0x03`, or `0x04`,
+  /// - the size does not match the format (33 bytes for compressed,
+  ///   65 bytes for uncompressed),
+  /// - the resulting point is not on `curve`.
   // Deserialize given data into a point on the given curve. This supports
   // compressed and uncompressed SEC-1 formats.
   // Returns null if data is not in correct format, data size is not exactly
@@ -99,7 +119,15 @@ module {
     };
   };
 
-  // Serialize given point to bytes in SEC-1 format.
+  /// Encodes an affine point into SEC1 bytes.
+  ///
+  /// `compressed = true` returns 33 bytes (`0x02`/`0x03` prefix indicating
+  /// the y parity, followed by the 32-byte x coordinate).
+  /// `compressed = false` returns 65 bytes (`0x04` prefix followed by the
+  /// 32-byte x and 32-byte y coordinates).
+  ///
+  /// Returns an empty array (`[]`) for `#infinity` (the point at infinity
+  /// has no SEC1 encoding). Never traps.
   public func toBytes(point : Point, compressed : Bool) : [Nat8] {
     switch point {
       case (#infinity(_)) {

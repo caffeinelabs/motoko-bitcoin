@@ -2,4 +2,13 @@ test/.vessel/
 test/_out/
 .vessel/
 
-.mops
+.mops/
+.icp/
+mops.lock
+node_modules/
+package.json
+package-lock.json
+.dfx/
+build/
+skills-lock.json
+.agents

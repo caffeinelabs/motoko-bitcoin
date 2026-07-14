@@ -1,7 +1,17 @@
+/// High-level Bitcoin transaction construction and signing helpers.
+///
+/// This module focuses on P2PKH transaction flows using provided UTXOs,
+/// destination outputs, and an abstract ECDSA signing proxy.
+///
+/// ```motoko name=import
+/// import Bitcoin "mo:bitcoin/bitcoin/Bitcoin";
+/// ```
+
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import List "mo:core/List";
 import Nat "mo:core/Nat";
+import Nat16 "mo:core/Nat16";
 import Nat32 "mo:core/Nat32";
 import Nat8 "mo:core/Nat8";
 import { type Result } "mo:core/Types";
@@ -24,14 +34,36 @@ module {
   let dustThreshold : Satoshi = 10_000;
   let defaultSequence : Nat32 = 0xffffffff;
 
-  type EcdsaProxy = {
-    // Takes a message hash and a derivation path, outputs a signature encoded
-    // as the concatenation of big endian representation of r and s values.
+  /// Interface for an external ECDSA signing service (typically the
+  /// Internet Computer's threshold-ECDSA management canister).
+  ///
+  /// `sign(messageHash, derivationPath)` takes a 32-byte message hash and
+  /// a BIP32 derivation path (each path component encoded as a `Blob`)
+  /// and must return a 64-byte signature: the big-endian `r` (32 bytes)
+  /// concatenated with the big-endian `s` (32 bytes).
+  ///
+  /// `publicKey()` must return `(sec1Pubkey, chainCode)` where `sec1Pubkey`
+  /// is the SEC1-encoded public key (33 bytes compressed or 65 bytes
+  /// uncompressed) corresponding to `derivationPath = []` (i.e. the root
+  /// public key), and `chainCode` is the 32-byte chain code.
+  public type EcdsaProxy = {
     sign : (Blob, [Blob]) -> Blob;
-    // Outputs SEC-1 encoded public key and a chain code.
     publicKey : () -> (Blob, Blob);
   };
 
+  /// Builds an unsigned transaction from UTXOs and destination outputs.
+  ///
+  /// Selects UTXOs in the order given by `utxos` until the sum covers
+  /// `fees + sum(destinations)`. Adds a change output to `changeAddress`
+  /// when the leftover exceeds the dust threshold (10_000 satoshis).
+  ///
+  /// Never traps. Returns `#err(message)` when:
+  /// - `version` is not `1` or `2`
+  ///   (`"Unexpected version number: ..."`),
+  /// - any destination or `changeAddress` cannot be converted to a
+  ///   `scriptPubKey` (errors propagated from `Address.scriptPubKey`),
+  /// - the supplied `utxos` cannot cover `fees + sum(destinations)`
+  ///   (`"Insufficient balance"`).
   // Builds a transaction.
   // `version` is the transaction version. Currently only 1 and 2 are
   // supported.
@@ -114,6 +146,20 @@ module {
     );
   };
 
+  /// Signs all inputs of a P2PKH transaction.
+  ///
+  /// Computes the SIGHASH_ALL signature hash for each input, asks
+  /// `ecdsaProxy` for a signature, DER-encodes it, appends the sighash type
+  /// byte, and stores the resulting `<sig> <pubkey>` scriptSig on each input.
+  /// Mutates `transaction.txInputs[i].script` in place.
+  ///
+  /// Returns `#err(message)` when `Address.scriptPubKey(sourceAddress)`
+  /// fails. Otherwise returns `#ok(transaction)`.
+  ///
+  /// Traps if `transaction.txInputs` is non-empty and the supplied
+  /// `ecdsaProxy.sign` returns a signature blob that cannot be DER-encoded
+  /// by `Der.encodeSignature` (in practice this requires a signature blob
+  /// other than the expected 64-byte concatenation of `r` and `s`).
   // Sign given transaction.
   // `sourceAddress` is the spender's address appearing in the TxOutputs being
   // spent from.
@@ -139,7 +185,7 @@ module {
               Types.SIGHASH_ALL,
             );
             let signature : Blob = ecdsaProxy.sign(
-              Blob.fromArray(sighash),
+              sighash.toBlob(),
               derivationPath,
             );
             let encodedSignature : [Nat8] = Der.encodeSignature(signature).toArray();
@@ -150,7 +196,7 @@ module {
                 if (n < encodedSignature.size()) {
                   encodedSignature[n];
                 } else {
-                  Nat8.fromNat(Types.SIGHASH_ALL.toNat());
+                  Types.SIGHASH_ALL.toNat16().toNat8();
                 };
               },
             );
@@ -176,7 +222,12 @@ module {
     };
   };
 
-  // Create and sign a transaction.
+  /// Builds and signs a P2PKH transaction in one step.
+  ///
+  /// Equivalent to calling `buildTransaction` followed by
+  /// `signP2pkhTransaction`. Returns `#err(message)` propagated from either
+  /// step (see those functions for the full list of error and trap
+  /// conditions).
   // `sourceAddress` is the spender's address appearing in the TxOutputs being
   // spent from.
   // `ecdsaProxy` is an interface for ECDSA signing functionality.

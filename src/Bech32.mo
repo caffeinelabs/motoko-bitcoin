@@ -1,3 +1,16 @@
+/// Bech32 and Bech32m encoding and decoding.
+///
+/// Bech32 is a segwit address format defined in
+/// [BIP173](https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki).
+/// Bech32m is a modification defined in
+/// [BIP350](https://github.com/bitcoin/bips/blob/master/bip-0350.mediawiki)
+/// used for native segwit version 1 (Taproot) and later addresses.
+///
+/// Import from the bitcoin package to use this module.
+/// ```motoko name=import
+/// import Bech32 "mo:bitcoin/Bech32";
+/// ```
+
 import Array "mo:core/Array";
 import Blob "mo:core/Blob";
 import Nat "mo:core/Nat";
@@ -10,11 +23,19 @@ import { type Result } "mo:core/Types";
 import VarArray "mo:core/VarArray";
 
 module {
+  /// The Bech32 encoding variant to use.
+  ///
+  /// - `#BECH32`: Original Bech32 encoding (BIP173), used for segwit version 0.
+  /// - `#BECH32M`: Bech32m encoding (BIP350), used for segwit version 1+.
   public type Encoding = {
     #BECH32;
     #BECH32M;
   };
 
+  /// The result of a successful Bech32 decode operation.
+  ///
+  /// Contains the encoding type, the human-readable part (HRP), and the data
+  /// payload as a byte array.
   // A decoded result contains Encoding type, human-readable part (HRP), and Data.
   public type DecodeResult = (Encoding, Text, [Nat8]);
 
@@ -50,12 +71,32 @@ module {
   ];
 
   func arrayToText(arr : [Nat8]) : Text {
-    switch (Blob.fromArray(arr).decodeUtf8()) {
+    switch (arr.toBlob().decodeUtf8()) {
       case (?t) t;
       case null Runtime.trap("unreachable");
     };
   };
 
+  /// Encodes data as a Bech32 or Bech32m string.
+  ///
+  /// `hrp` is the human-readable part (must be lowercase ASCII in the range
+  /// `'!'`..`'~'` and non-empty). `values` is the data payload encoded as
+  /// 5-bit groups (each value must be in `[0, 31]`). `encoding` selects
+  /// between `#BECH32` (BIP173, segwit v0) and `#BECH32M` (BIP350,
+  /// segwit v1+).
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let encoded = Bech32.encode("bc", [0, 1, 2], #BECH32M);
+  /// ```
+  ///
+  /// Traps if any of the following hold:
+  /// - `hrp` is empty.
+  /// - `hrp` contains a character outside the printable ASCII range
+  ///   `'!'`..`'~'`, or contains an uppercase letter `'A'`..`'Z'`.
+  /// - Any byte in `values` is greater than `31` (out-of-bounds index into
+  ///   the Bech32 charset).
+  /// - The encoded output would exceed the 90-character Bech32 limit.
   // Encode input in Bech32 or a Bech32m.
   public func encode(hrp : Text, values : [Nat8], encoding : Encoding) : Text {
     assert hrp.size() > 0;
@@ -82,6 +123,32 @@ module {
     arrayToText(output);
   };
 
+  /// Decodes a Bech32 or Bech32m encoded string.
+  ///
+  /// Returns `#ok((encoding, hrp, data))` on success. The `hrp` in the
+  /// result is normalized to lowercase and `data` is the 5-bit-group
+  /// payload (excluding checksum).
+  ///
+  /// Example:
+  /// ```motoko include=import
+  /// let result = Bech32.decode("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4");
+  /// ```
+  ///
+  /// Never traps. Returns `#err(message)` for every malformed input. The
+  /// distinct error categories are:
+  /// - `"Found unexpected character: ..."` — `input` contains a byte
+  ///   outside the printable ASCII range `'!'`..`'~'`.
+  /// - `"Inconsistent character casing in HRP."` — `input` contains both
+  ///   lowercase and uppercase alphabetic characters (forbidden by Bech32
+  ///   standard).
+  /// - `"Bad separator position: ..."` — the `'1'` separator is missing,
+  ///   too close to the start, or leaves fewer than 6 checksum characters
+  ///   at the end; or the total length exceeds 90 characters.
+  /// - `"Invalid character found: ..."` — a character in the data section
+  ///   is not part of the Bech32 charset.
+  /// - `"Checksum verification failed."` — the polymod checksum (computed
+  ///   for both BECH32 and BECH32M) does not match either variant.
+  /// - `"Failed to decode HRP."` — the HRP bytes are not valid UTF-8.
   // Decode given text as Bech32 or Bech32m.
   public func decode(input : Text) : Result<DecodeResult, Text> {
     // Locate the '1' separator.
@@ -107,7 +174,7 @@ module {
 
     };
 
-    if (lowercase == uppercase) {
+    if (lowercase and uppercase) {
       return #err("Inconsistent character casing in HRP.");
     };
 
@@ -140,7 +207,7 @@ module {
 
     return switch (
       verifyChecksum(hrp, values),
-      Blob.fromArray(hrp).decodeUtf8(),
+      hrp.toBlob().decodeUtf8(),
     ) {
       case (#err(msg), _) {
         #err(msg);

@@ -1,3 +1,9 @@
+/// Public key decoding and SEC1 conversion utilities.
+///
+/// ```motoko name=import
+/// import Publickey "mo:bitcoin/ecdsa/Publickey";
+/// ```
+
 import { type Result } "mo:core/Types";
 
 import Affine "../ec/Affine";
@@ -8,7 +14,16 @@ module {
   type PublicKey = Types.PublicKey;
   type EncodedPublicKey = Types.EncodedPublicKey;
 
-  // Decode a public key from several possible forms.
+  /// Decodes a public key from encoded point or SEC1 bytes.
+  ///
+  /// Never traps. Returns `#err(message)` when:
+  /// - the input is `#sec1` and `Affine.fromBytes` fails (size mismatch,
+  ///   bad leading byte, or off-curve point) —
+  ///   `"Could not deserialize data."`,
+  /// - the decoded point is at infinity —
+  ///   `"Can't create public key from point at infinity."`,
+  /// - the input is `#point` and the point is not on its curve —
+  ///   `"Point not on curve."`.
   public func decode(pk : EncodedPublicKey) : Result<Types.PublicKey, Text> {
     switch (pk) {
       case (#point(point)) {
@@ -60,7 +75,13 @@ module {
     };
   };
 
-  // Converts given public key to SEC1 format.
+  /// Encodes a public key to compressed or uncompressed SEC1 form.
+  ///
+  /// `compressed = true` returns 33 bytes (`0x02`/`0x03` prefix + 32-byte x).
+  /// `compressed = false` returns 65 bytes (`0x04` prefix + 32-byte x + 32-byte y).
+  ///
+  /// Never traps. The returned tuple pairs the SEC1 byte encoding with the
+  /// curve the key belongs to.
   public func toSec1(
     pk : PublicKey,
     compressed : Bool,

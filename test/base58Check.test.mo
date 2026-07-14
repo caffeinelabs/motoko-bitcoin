@@ -6,6 +6,10 @@ import Base58Check "../src/Base58Check";
 
 let testData : [(?[Nat8], Text)] = [
   (
+    // Boundary case: input Base58-decodes to exactly 4 bytes (the
+    // checksum alone) and the payload is empty. This is the smallest
+    // valid Base58Check string. "3QJmnh" Base58-decodes to the 4-byte
+    // double-SHA256 prefix of the empty byte string.
     ?[],
     "3QJmnh",
   ),
@@ -120,6 +124,21 @@ let testData : [(?[Nat8], Text)] = [
   (
     null,
     "xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHL",
+  ),
+  (
+    // Empty Base58 string decodes to 0 bytes — too short for a 4-byte checksum.
+    null,
+    "",
+  ),
+  (
+    // "1" decodes to a single zero byte — too short for a 4-byte checksum.
+    null,
+    "1",
+  ),
+  (
+    // "111" decodes to three zero bytes — too short for a 4-byte checksum.
+    null,
+    "111",
   ),
   (
     // prettier-ignore
