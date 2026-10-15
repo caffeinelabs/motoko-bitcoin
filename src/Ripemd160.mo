@@ -408,7 +408,7 @@ module {
       while (i_msg != 56) {
         writeByte(0);
       };
-      writeByte(Nat8.fromIntWrap(Nat64.toNat(bitlen)));
+      writeByte(Nat8.fromIntWrap(bitlen.toNat()));
       writeByte(Nat8.fromIntWrap(Nat64.toNat(bitlen >> 8)));
       writeByte(Nat8.fromIntWrap(Nat64.toNat(bitlen >> 16)));
       writeByte(Nat8.fromIntWrap(Nat64.toNat(bitlen >> 24)));
