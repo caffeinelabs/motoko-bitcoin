@@ -10,15 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Update `core` from `2.6.0` to `2.6.2`.
-- Update `sha2` from `0.1.14` to `0.3.0` and adapt `Hmac` to the new sha2 API
-  (internal change only; the `Hmac` interface is unchanged).
-- Benchmarks are now compiled with the `wasm-opt` post-pass (`[optimize]`) and
-  run on the moc 2.0.0 toolchain. Published benchmark numbers are therefore not
-  comparable with those of earlier versions (measurement-methodology change,
-  not a code regression or improvement).
-- Update the README examples to the current API (`mo:bitcoin/…` imports,
-  `Hmac.writeArray`, `Blob` results) and add an installation and a formatting
-  section.
+- Update `sha2` from `0.1.14` to `0.3.0`.
+- Update README.
 
 ## [0.2.1] - 2026-07-12
 
