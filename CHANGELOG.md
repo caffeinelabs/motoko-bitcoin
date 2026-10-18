@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Update `core` from `2.6.0` to `2.6.2`.
-- Update `sha2` from `0.1.14` to `0.2.5` and adapt `Hmac` to the new sha2 API
+- Update `sha2` from `0.1.14` to `0.3.0` and adapt `Hmac` to the new sha2 API
   (internal change only; the `Hmac` interface is unchanged).
 - Benchmarks are now compiled with the `wasm-opt` post-pass (`[optimize]`) and
   run on the moc 2.0.0 toolchain. Published benchmark numbers are therefore not
