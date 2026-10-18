@@ -171,6 +171,11 @@ Run all benchmarks locally:
 mops bench
 ```
 
+Since 0.2.2 the benchmarks are compiled with moc 2.0.0 and optimized with the
+`wasm-opt` post-pass (`[optimize]` in `mops.toml`). Their numbers are therefore
+not comparable with those of earlier versions: the difference comes from the
+measurement setup, not from a change in the code.
+
 ## Development
 
 Format the code with:
