@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run on the moc 2.0.0 toolchain. Published benchmark numbers are therefore not
   comparable with those of earlier versions (measurement-methodology change,
   not a code regression or improvement).
+- Update the README examples to the current API (`mo:bitcoin/…` imports,
+  `Hmac.writeArray`, `Blob` results) and add an installation and a formatting
+  section.
 
 ## [0.2.1] - 2026-07-12
 
