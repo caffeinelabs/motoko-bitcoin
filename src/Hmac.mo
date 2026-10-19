@@ -46,7 +46,13 @@ module {
 
   object sha256DigestFactory {
     public let blockSize : Nat = 64;
-    public func create() : Digest = Sha256.Digest(#sha256);
+    public func create() : Digest {
+      let digest = Sha256.new(#sha256);
+      {
+        writeArray = func(data : [Nat8]) = digest.writeArray(data);
+        sum = func() : Blob = digest.sum();
+      };
+    };
   };
   /// Creates an HMAC-SHA256 instance with the given `key`.
   ///
@@ -65,7 +71,13 @@ module {
 
   object sha512DigestFactory {
     public let blockSize : Nat = 128;
-    public func create() : Digest = Sha512.Digest(#sha512);
+    public func create() : Digest {
+      let digest = Sha512.new(#sha512);
+      {
+        writeArray = func(data : [Nat8]) = digest.writeArray(data);
+        sum = func() : Blob = digest.sum();
+      };
+    };
   };
   /// Creates an HMAC-SHA512 instance with the given `key`.
   ///

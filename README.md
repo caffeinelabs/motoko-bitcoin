@@ -5,100 +5,93 @@
 
 Requires the [`mops`](https://docs.mops.one/quick-start) package manager for Motoko.
 
-## Testing
-
-Run all tests
-
-```
-mops test --mode wasi
-```
-
-## Benchmarks
-
-This project includes performance benchmarks using the `bench` mops package.
-
-Run all benchmarks locally:
+## Installation
 
 ```sh
-mops bench
+mops add bitcoin
 ```
-
-Tips:
-
-- Use your shell's filtering (or bench runner options) to focus on specific suites, e.g., base58 or bitcoin tx.
-- Benchmark files are located under the `bench/` directory and cover encoding (Base58/Base58Check/Bech32), hashing and HMAC, BIP32 derivation, EC arithmetic, ECDSA verification, and Bitcoin transaction building and sighash.
 
 ## Usage
 
 Base58:
 
 ```motoko
-import Base58 "src/Base58";
+import Base58 "mo:bitcoin/Base58";
 
-let encoded : Text = Base58.encode([/* Nat8 data */]);
+let encoded : Text = Base58.encode([0x00, 0x01, 0x02]);
+assert Base58.decodeOpt(encoded) == ?[0x00, 0x01, 0x02];
 
 ```
 
 Base58Check:
 
 ```motoko
-import Base58Check "src/Base58Check";
+import Base58Check "mo:bitcoin/Base58Check";
 
-let encoded : Text = Base58Check.encode([/* Nat8 data */]);
+let encoded : Text = Base58Check.encode([0x00, 0x01, 0x02]);
+assert Base58Check.decode(encoded) == ?[0x00, 0x01, 0x02];
 
 ```
 
 HMAC:
 
 ```motoko
-import Hmac "src/Hmac";
+import Hmac "mo:bitcoin/Hmac";
 
-let key : [Nat8] = [/* Key bytes */];
+let key : [Nat8] = [0x01, 0x02, 0x03];
 
 // HMAC-SHA256
 let hmacSha256 : Hmac.Hmac = Hmac.sha256(key);
-hmacSha256.write([/* Nat8 data */]);
-var result : [Nat8] = hmacSha256.sum();
+hmacSha256.writeArray([0x04, 0x05]);
+var result : Blob = hmacSha256.sum();
 
 // HMAC-SHA512
 let hmacSha512 : Hmac.Hmac = Hmac.sha512(key);
-hmacSha512.write([/* Nat8 data */]);
+hmacSha512.writeArray([0x04, 0x05]);
 result := hmacSha512.sum();
 
-// HMAC-X
-let hmacCustomDigest : Hmac.Hmac = Hmac.new(
+// HMAC with a custom hash function
+let hmacCustom : Hmac.Hmac = Hmac.new(
   key,
-  object {
-    public let blockSize : Nat = 64;
-    public func create() : Hmac.Digest = object {
-      public func write(data : [Nat8]) { /* Process input */ };
-      public func sum() : [Nat8] = [/* Compute sum */];
+  {
+    blockSize = 64;
+    create = func() : Hmac.Digest {
+      {
+        writeArray = func(_data : [Nat8]) { /* process input */ };
+        sum = func() : Blob = "" /* compute the hash */;
+      };
     };
   },
 );
-hmacCustomDigest.write([/* Nat8 data */]);
-result := hmacCustomDigest.sum();
+hmacCustom.writeArray([0x04, 0x05]);
+result := hmacCustom.sum();
 
 ```
+
+An `Hmac` is one-shot: after `sum()`, further calls trap. Create a new one for
+the next HMAC.
 
 RIPEMD160:
 
 ```motoko
-import Ripemd160 "src/Ripemd160";
+import Ripemd160 "mo:bitcoin/Ripemd160";
 
-let digest : Ripemd160.Digest = Ripemd160.Digest();
-digest.write([/* Nat8 data */]);
-digest.write([/* Nat8 data */]);
+let digest = Ripemd160.Digest();
+digest.write([0x01, 0x02]);
+digest.write([0x03, 0x04]);
 let result : [Nat8] = digest.sum();
+
+// One-shot
+assert Ripemd160.hash([0x01, 0x02, 0x03, 0x04]) == result;
 
 ```
 
-EC
+EC:
 
 ```motoko
-import Jacobi "src/ec/Jacobi";
-import Affine "src/ec/Affine";
-import Curves "src/ec/Curves";
+import Jacobi "mo:bitcoin/ec/Jacobi";
+import Affine "mo:bitcoin/ec/Affine";
+import Curves "mo:bitcoin/ec/Curves";
 
 // Get secp256k1 curve parameters.
 let secp256k1 : Curves.Curve = Curves.secp256k1;
@@ -113,40 +106,81 @@ let basePointJacobi : Jacobi.Point = Jacobi.fromAffine(basePointAffine);
 let mul1 = Jacobi.mul(basePointJacobi, 1234);
 let mul2 = Jacobi.mulBase(1234, Curves.secp256k1);
 
-assert (Jacobi.isEqual(mul1, mul2));
+assert Jacobi.isEqual(mul1, mul2);
 
 ```
 
-Bip32
+BIP32:
 
 ```motoko
-import Bip32 "src/Bip32";
+import Bip32 "mo:bitcoin/Bip32";
 
 let rootKey : ?Bip32.ExtendedPublicKey = Bip32.parse("xpub661MyMwAqRbcFtXgS5sYJABqqG9YLmC4Q1Rdap9gSE8NqtwybGhePY2gZ29ESFjqJoCu1Rupje8YtGqsefD265TMg7usUDFdp6W1EGMcet8", null);
 
-do ? {
-  let derived : ?Bip32.ExtendedPublicKey = rootKey!.derivePath(#text "m/1/2/3");
-  derived!;
+// Derive a child key and serialize it as an xpub
+let derived : ?Text = do ? {
+  rootKey!.derivePath(#text "m/1/2/3")!.serialize();
 };
+assert derived != null;
 
 ```
 
 Bech32:
 
 ```motoko
-import Bech32 "src/Bech32";
+import Bech32 "mo:bitcoin/Bech32";
 
-Bech32.encode("bc", [/* Nat8 data */], #BECH32);
-Bech32.decode("bc", "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4");
+let encoded : Text = Bech32.encode("bc", [0x00, 0x01, 0x02], #BECH32);
+let decoded = Bech32.decode("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4");
 
 ```
 
-Segwit:
+SegWit:
 
 ```motoko
-import Segwit "src/Segwit";
+import Segwit "mo:bitcoin/Segwit";
 
-Segwit.encode("bc", /* WitnessProgram */);
-Segwit.decode("bc", "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4");
+// A version-0 witness program of 20 bytes (P2WPKH)
+let program : Segwit.WitnessProgram = {
+  version = 0;
+  program = [0x75, 0x1e, 0x76, 0xe8, 0x19, 0x91, 0x96, 0xd4, 0x54, 0x94, 0x1c, 0x45, 0xd1, 0xb3, 0xa3, 0x23, 0xf1, 0x43, 0x3b, 0xd6];
+};
+let address = Segwit.encode("bc", program);
+let decoded = Segwit.decode("BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4");
 
+```
+
+## Testing
+
+Run all tests:
+
+```sh
+mops test
+```
+
+## Benchmarks
+
+Benchmark files are under the `bench/` directory and cover encoding
+(Base58/Base58Check/Bech32), hashing and HMAC, BIP32 derivation, EC arithmetic,
+ECDSA verification, and Bitcoin transaction building and sighash. They use the
+`bench-helper` mops package.
+
+Run all benchmarks locally:
+
+```sh
+mops bench
+```
+
+Since 0.2.2 the benchmarks are compiled with moc 2.0.0 and optimized with the
+`wasm-opt` post-pass (`[optimize]` in `mops.toml`). Their numbers are therefore
+not comparable with those of earlier versions: the difference comes from the
+measurement setup, not from a change in the code.
+
+## Development
+
+Format the code with:
+
+```bash
+npm install --no-save prettier prettier-plugin-motoko
+npx prettier --plugin prettier-plugin-motoko --write '**/*.{mo,json,md}'
 ```

@@ -1,9 +1,8 @@
-name: Tests and formatting
+name: Tests, benchmarks and formatting
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
     types: [synchronize, opened, reopened, ready_for_review, unlabeled]
 
@@ -11,39 +10,68 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Read-only token: the jobs only check out and run tools. Without this,
+# the token inherits the repository default (often write), and that
+# token is exposed to third-party actions and npm packages.
+permissions:
+  contents: read
+
 jobs:
   test:
-    name: Run tests
-    runs-on: ubuntu-22.04
-
+    name: Tests and Benchmarks
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: caffeinelabs/setup-mops@v1
-
-      - name: make sure moc is installed
-        run: mops toolchain bin moc || mops toolchain use moc latest
-
-      - name: Show mops version
-        run: mops -v
-
-      - name: Install all mops dependencies
-        run: mops install
-
-      - name: run tests
-        run: mops test
-
-  format:
-    name: Check formatting
-    runs-on: ubuntu-22.04
-
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
-          node-version: "22"
+          persist-credentials: false # no job pushes; keep the token out of .git/config
 
-      - name: Install prettier plugin
-        run: npm install --save-dev prettier prettier-plugin-motoko
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: latest
 
-      - name: Run prettier check
-        run: npx prettier --check --plugin=prettier-plugin-motoko **/*.mo
+      - name: Install mops
+        uses: caffeinelabs/setup-mops@v1
+
+      - name: Make sure moc is installed
+        run: mops toolchain bin moc
+
+      - name: Show versions
+        run: |
+          mops --version
+          $(mops toolchain bin moc) --version
+
+      - name: Install dependencies
+        run: mops install --locked
+
+      - name: Make sure pocket-ic is installed
+        run: mops toolchain bin pocket-ic
+
+      - name: Make sure wasm-opt is installed
+        run: mops toolchain bin wasm-opt
+
+      - name: Run tests
+        run: mops test --locked
+
+      - name: Run benchmarks
+        run: mops bench --locked
+
+  fmt:
+    name: Formatting Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false # no job pushes; keep the token out of .git/config
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: latest
+
+      - name: Prettier Check
+        run: |
+          npm install prettier prettier-plugin-motoko --no-save
+          npx -y prettier --plugin prettier-plugin-motoko --check '**/*.{mo,json,md}'

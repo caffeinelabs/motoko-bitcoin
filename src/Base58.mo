@@ -75,7 +75,7 @@ module {
   ///
   /// Never traps.
   public func isBase58Alphabet(input : Text) : Bool {
-    let bytes : Blob = Text.encodeUtf8(input);
+    let bytes : Blob = input.encodeUtf8();
     let size = bytes.size();
     var pos : Nat = 0;
 
@@ -139,7 +139,7 @@ module {
   /// particular, spaces embedded inside the payload, ASCII characters such
   /// as `'0'`, `'O'`, `'I'`, `'l'`, and any non-ASCII byte all trap.
   public func decode(input_ : Text) : [Nat8] {
-    let input : Blob = Text.encodeUtf8(input_);
+    let input : Blob = input_.encodeUtf8();
     let inputSize = input.size();
     var pos : Nat = 0;
 
