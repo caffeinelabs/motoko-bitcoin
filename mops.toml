@@ -1,6 +1,6 @@
 [package]
 name = "bitcoin"
-version = "0.2.2"
+version = "0.2.3"
 description = "Algorithms for bitcoin integration"
 repository = "https://github.com/caffeinelabs/motoko-bitcoin"
 keywords = [ "bitcoin" ]
