@@ -40,7 +40,12 @@ module {
   /// instance: `closed` is set, and any subsequent call to `sum()` or
   /// `writeArray()` will trap. To compute another HMAC, construct a new Hmac.
   public type Hmac = {
+    // Append `data` to the message being authenticated. Traps if the Hmac
+    // has already been finalized via `sum()`.
     writeArray : ([Nat8]) -> ();
+    // Finalize the HMAC and return the tag. Consumes the Hmac: the instance
+    // becomes closed, and any further call to `sum()` or `writeArray()`
+    // will trap. Callers must create a new Hmac for another computation.
     sum : () -> Blob;
   };
 

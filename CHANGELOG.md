@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3] - 2026-10-19
+
+### Added
+
+- Add the `Curves.Glv` type with the GLV endomorphism parameters of secp256k1.
+
+### Changed
+
+- Speed up `Jacobi.mul()` and `Jacobi.mulBase()` on secp256k1 with the GLV
+  endomorphism: about 34% fewer instructions for 256-bit scalars. ECDSA
+  verification and BIP32 derivation are 29–35% cheaper.
+- **Breaking:** `Curves.Curve` has a new field `glv : ?Glv`. Code that
+  constructs its own `Curve` values must add it (`glv = null` keeps the
+  previous scalar multiplication).
+
 ## [0.2.2] - 2026-10-16
 
 ### Changed

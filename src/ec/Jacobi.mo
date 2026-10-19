@@ -165,6 +165,10 @@ module {
     switch (scale(point)) {
       case (#infinity(curve)) #infinity(curve);
       case (#point(x2, y2, _, curve)) {
+        switch (curve.glv) {
+          case (?glv) return mulGlv(x2, y2, other, glv, curve);
+          case null {};
+        };
         var p : (Int, Int, Int) = (0, 0, 1);
         let naf = Numbers.toNaf(other);
         let y2neg = y2.neg().value;
@@ -193,6 +197,77 @@ module {
         #point(fpFromInt(p.0, curve), fpFromInt(p.1, curve), fpFromInt(p.2, curve), curve);
       };
     };
+  };
+
+  /// Scalar multiplication using the GLV endomorphism. Decomposes the scalar
+  /// `k mod r` into `(k1, k2)` such that `k1 + lambda * k2 == k (mod r)` and
+  /// both halves are roughly half the bit-length of `r`. Then computes
+  /// `k1 * P + k2 * phi(P)` with a Straus/Shamir-style interleaved-NAF loop,
+  /// where `phi(X, Y, Z) = (beta * X, Y, Z)` in Jacobian coordinates.
+  /// Caller guarantees `(x, y)` is the affine representation (Z=1) of P and
+  /// that `scalar != 0`.
+  func mulGlv(
+    x : Fp,
+    y : Fp,
+    scalar : Nat,
+    glv : Curves.Glv,
+    curve : Curves.Curve,
+  ) : Point {
+    let n : Int = curve.r;
+    let k : Int = scalar % curve.r;
+    if (k == 0) {
+      return #infinity(curve);
+    };
+    let halfN : Int = n / 2;
+
+    // Both `b2` and `-b1` are positive for valid GLV bases, so the numerators
+    // are non-negative and Motoko's truncating Int division yields rounding
+    // to nearest (with halves rounded away from zero, which is acceptable).
+    let c1 : Int = (glv.b2 * k + halfN) / n;
+    let c2 : Int = (-glv.b1 * k + halfN) / n;
+    let k1 : Int = k - c1 * glv.a1 - c2 * glv.a2;
+    let k2 : Int = -c1 * glv.b1 - c2 * glv.b2;
+
+    let absK1 = Int.abs(k1);
+    let absK2 = Int.abs(k2);
+
+    let p1x = x.value;
+    let yPos = y.value;
+    let yNeg = y.neg().value;
+    let p1y = if (k1 < 0) yNeg else yPos;
+    let p1yAlt = if (k1 < 0) yPos else yNeg;
+    let p2x = x.mul(curve.Fp(glv.beta)).value;
+    let p2y = if (k2 < 0) yNeg else yPos;
+    let p2yAlt = if (k2 < 0) yPos else yNeg;
+
+    let naf1 = Numbers.toNaf(absK1);
+    let naf2 = Numbers.toNaf(absK2);
+    let len = if (naf1.size() > naf2.size()) naf1.size() else naf2.size();
+
+    var p : (Int, Int, Int) = (0, 0, 1);
+    for (i in Nat.rangeByInclusive(len - 1, 0, -1)) {
+      p := doDouble(p.0, p.1, p.2, curve.a, curve.p);
+      if (i < naf1.size()) {
+        let d : Int = naf1[i];
+        if (d > 0) {
+          p := _add(p.0, p.1, p.2, p1x, p1y, 1, curve.a, curve.p);
+        } else if (d < 0) {
+          p := _add(p.0, p.1, p.2, p1x, p1yAlt, 1, curve.a, curve.p);
+        };
+      };
+      if (i < naf2.size()) {
+        let d : Int = naf2[i];
+        if (d > 0) {
+          p := _add(p.0, p.1, p.2, p2x, p2y, 1, curve.a, curve.p);
+        } else if (d < 0) {
+          p := _add(p.0, p.1, p.2, p2x, p2yAlt, 1, curve.a, curve.p);
+        };
+      };
+    };
+    if (p.1 == 0 or p.2 == 0) {
+      return #infinity(curve);
+    };
+    #point(fpFromInt(p.0, curve), fpFromInt(p.1, curve), fpFromInt(p.2, curve), curve);
   };
 
   /// Multiplies the curve generator by scalar `other`.
