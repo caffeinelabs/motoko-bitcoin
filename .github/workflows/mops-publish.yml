@@ -1,0 +1,58 @@
+name: Publish on Mops
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: >
+          Existing release tag to publish (for example, v1.2.3). Use this to
+          publish a tag that was pushed before this workflow existed, or to
+          re-run a publish that failed for a reason fixed on main since: the
+          workflow file comes from the dispatched branch, the package contents
+          from the tag.
+        required: true
+        type: string
+  push:
+    tags:
+      - v*.*.*
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      PUBLISH_REF: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.PUBLISH_REF }}
+          persist-credentials: false # no job pushes; keep the token out of .git/config
+
+      # Guards a dispatch against publishing the wrong tree.
+      - name: Check the package version against the tag
+        run: |
+          set -euo pipefail
+          VERSION=$(awk '
+            /^\[/ { in_pkg = ($0 ~ /^\[package\][[:space:]]*$/); next }
+            in_pkg && /^[[:space:]]*version[[:space:]]*=/ {
+              match($0, /"[^"]*"/); print substr($0, RSTART + 1, RLENGTH - 2); exit
+            }
+          ' mops.toml)
+          if [[ "v$VERSION" != "$PUBLISH_REF" ]]; then
+            echo "::error::mops.toml has version $VERSION but the tag is $PUBLISH_REF"
+            exit 1
+          fi
+
+      - uses: caffeinelabs/setup-mops@d2c135befc4edfae4b90058e5d00c81d89ecfdeb # v1.4.1 + sub-actions pinned by digest
+        with:
+          # 3.5.0 is the first that benchmarks on moc 2 during publish.
+          mops-version: "3.5.1"
+          identity-pem: ${{ secrets.MOPS_IDENTITY_PEM }}
+      - run: mops install --locked
+      - run: mops publish
+        env:
+          # Keeps mops' GitHub API lookups off the shared anonymous rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
