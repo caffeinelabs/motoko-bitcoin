@@ -184,3 +184,17 @@ Format the code with:
 npm install --no-save prettier prettier-plugin-motoko
 npx prettier --plugin prettier-plugin-motoko --write '**/*.{mo,json,md}'
 ```
+
+## Releasing
+
+To release a new version:
+
+1. Open a PR that bumps `version` in the `[package]` section of `mops.toml` and
+   adds a matching `## [x.y.z]` section to `CHANGELOG.md`.
+2. Merge the PR. The `Release tag` workflow tags the merge commit as `vx.y.z`
+   and creates the GitHub release from the changelog section.
+3. The tag push starts the `Publish on Mops` workflow, which publishes the
+   package to [Mops](https://mops.one/bitcoin).
+
+To publish an existing tag again, run `Publish on Mops` manually and pass the
+tag.
