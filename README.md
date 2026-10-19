@@ -196,5 +196,5 @@ To release a new version:
 3. The tag push starts the `Publish on Mops` workflow, which publishes the
    package to [Mops](https://mops.one/bitcoin).
 
-To publish an existing tag again, run `Publish on Mops` manually and pass the
-tag.
+For details, including how to publish an existing tag again, see
+[`RELEASING.md`](RELEASING.md).
