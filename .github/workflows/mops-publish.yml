@@ -48,7 +48,11 @@ jobs:
 
       - uses: caffeinelabs/setup-mops@d2c135befc4edfae4b90058e5d00c81d89ecfdeb # v1.4.1 + sub-actions pinned by digest
         with:
-          mops-version: "3.4.2"
+          # 3.5.0 is the first that benchmarks on moc 2 during publish.
+          mops-version: "3.5.1"
           identity-pem: ${{ secrets.MOPS_IDENTITY_PEM }}
       - run: mops install --locked
       - run: mops publish
+        env:
+          # Keeps mops' GitHub API lookups off the shared anonymous rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
