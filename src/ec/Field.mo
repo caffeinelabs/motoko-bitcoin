@@ -16,13 +16,28 @@ module {
   /// Never traps. Returns `null` when `gcd(a, n) != 1` (in particular when
   /// `a == 0` or when `n` is composite and `a` shares a factor with `n`).
   public func inverse(a : Nat, n : Nat) : ?Nat {
-    let (gcd, x, _) = Numbers.eea(a, n);
+    // Every value is congruent to 0 mod 1; return the canonical residue.
+    if (n == 1) return ?0;
+    // Iterative extended Euclid that tracks only the coefficient of `a`:
+    // one bignum division per step. Invariant: t_i * a = r_i (mod n).
+    var r0 : Nat = n;
+    var r1 : Nat = a;
+    var t0 : Int = 0;
+    var t1 : Int = 1;
+    while (r1 != 0) {
+      let q = r0 / r1;
+      let r2 : Nat = r0 - q * r1;
+      r0 := r1;
+      r1 := r2;
+      let t2 = t0 - q * t1;
+      t0 := t1;
+      t1 := t2;
+    };
 
-    if (gcd != 1) {
+    if (r0 != 1) {
       null;
     } else {
-      let inverse = if (x < 0) x + n else x;
-      ?Int.abs(inverse);
+      ?Int.abs(if (t0 < 0) t0 + n else t0);
     };
   };
 

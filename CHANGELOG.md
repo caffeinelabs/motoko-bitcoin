@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     multiplication (verify −8.1%, verify heap −8.3%).
   - ECDSA verification computes `u1 * G + u2 * Q` with one combined
     multiplication (verify −25.1%, verify heap −26.6%).
+  - `Field.inverse()` uses an iterative extended Euclidean algorithm with one
+    division per step (one inversion −22%, verify −1.6%).
 
 ## [0.2.3] - 2026-10-19
 

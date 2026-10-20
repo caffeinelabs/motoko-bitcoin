@@ -12,6 +12,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Field arithmetic on `Nat` residues     |  127_092_370 |  −8.0% |   10.67 MiB |  −9.4% |   442_104_728 | −5.9% |     23_711_013 |  −8.9% |
 | Width-5 wNAF, Jacobian tables          |  116_817_125 |  −8.1% |    9.78 MiB |  −8.3% |   413_335_328 | −6.5% |     24_593_089 |  +3.7% |
 | Combined multiplication in verify      |   87_478_767 | −25.1% |    7.18 MiB | −26.6% |   412_601_208 | −0.2% |     24_599_742 |     0% |
+| Iterative field inversion              |   86_057_048 |  −1.6% |    7.11 MiB |  −1.0% |   409_007_176 | −0.9% |     23_890_156 |  −2.9% |
 
 Columns:
 
@@ -60,6 +61,15 @@ heap (its own benchmark, measured without `wasm-opt`).
    half-length scalars, so the two multiplications share one set of about
    129 doublings instead of needing about 258. BIP32 derivation and `mul`
    are single multiplications and don't change.
+
+5. **Iterative field inversion.** `Field.inverse` used a recursive extended
+   Euclidean algorithm on `Int` that performed two bignum divisions per step
+   and tracked both Bézout coefficients. The iterative version does one
+   division per step and tracks only the coefficient it returns: one
+   inversion mod p drops from 3.14M to 2.44M instructions. Verify does two
+   (s⁻¹ mod n and the final conversion to affine coordinates). A binary GCD
+   (shifts and subtractions only) measured 18.6M, six times slower, because
+   it needs many more bignum operations.
 
 ## Tried and not adopted
 
