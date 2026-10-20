@@ -47,6 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     size stays the same.
   - `Numbers.toWnaf()` recodes on 64-bit machine words instead of bignums,
     42 times faster (verify −11.4%, BIP32 derivation −7.7%).
+  - Point additions with fewer field additions and subtractions (verify
+    −2.3%, BIP32 derivation −2.1%).
 
 ## [0.2.3] - 2026-10-19
 

@@ -549,6 +549,8 @@ module {
     (X3, Y3, Z3);
   };
 
+  // P1 + P2 for an affine P2 (Z2 = 1): 8 multiplications and 3 squarings,
+  // in the H^3 form that needs few additions and subtractions.
   func addWithZ2Eq1(
     X1 : Nat,
     Y1 : Nat,
@@ -562,24 +564,26 @@ module {
     let U2 = fmul(X2, Z1Z1, p);
     let S2 = fmul(Y2, fmul(Z1, Z1Z1, p), p);
     let H = fsub(U2, X1, p);
-    let r = fdbl(fsub(S2, Y1, p), p);
+    let r = fsub(S2, Y1, p);
 
-    if (r == 0 and H == 0) {
-      return doubleWithZ1(X2, Y2, a, p);
+    if (H == 0) {
+      return if (r == 0) doubleWithZ1(X2, Y2, a, p) else (0, 0, 0);
     };
 
     let HH = fsqr(H, p);
-    let I = fdbl(fdbl(HH, p), p);
-    let J = fmul(H, I, p);
-    let V = fmul(X1, I, p);
-    let X3 = fsub(fsub(fsqr(r, p), J, p), fdbl(V, p), p);
-    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fdbl(fmul(Y1, J, p), p), p);
-    // Z3 = (Z1 + H)^2 - Z1Z1 - HH
-    let Z3 = fsub(fsub(fsqr(fadd(Z1, H, p), p), Z1Z1, p), HH, p);
+    let HHH = fmul(H, HH, p);
+    let V = fmul(X1, HH, p);
+    // X3 = r^2 - H^3 - 2 * V
+    let X3 = fsub(fsub(fsub(fsqr(r, p), HHH, p), V, p), V, p);
+    // Y3 = r * (V - X3) - Y1 * H^3
+    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fmul(Y1, HHH, p), p);
+    let Z3 = fmul(Z1, H, p);
 
     (X3, Y3, Z3);
   };
 
+  // P1 + P2 for arbitrary Z1, Z2: 12 multiplications and 4 squarings, in
+  // the same H^3 form as addWithZ2Eq1.
   func addWithArbitraryZ(
     X1 : Nat,
     Y1 : Nat,
@@ -597,19 +601,18 @@ module {
     let S1 = fmul(Y1, fmul(Z2, Z2Z2, p), p);
     let S2 = fmul(Y2, fmul(Z1, Z1Z1, p), p);
     let H = fsub(U2, U1, p);
-    let r = fdbl(fsub(S2, S1, p), p);
+    let r = fsub(S2, S1, p);
 
-    if (H == 0 and r == 0) {
-      return doDouble(X1, Y1, Z1, a, p);
+    if (H == 0) {
+      return if (r == 0) doDouble(X1, Y1, Z1, a, p) else (0, 0, 0);
     };
 
-    let I = fsqr(fdbl(H, p), p);
-    let J = fmul(H, I, p);
-    let V = fmul(U1, I, p);
-    let X3 = fsub(fsub(fsqr(r, p), J, p), fdbl(V, p), p);
-    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fdbl(fmul(S1, J, p), p), p);
-    // Z3 = ((Z1 + Z2)^2 - Z1Z1 - Z2Z2) * H
-    let Z3 = fmul(fsub(fsub(fsqr(fadd(Z1, Z2, p), p), Z1Z1, p), Z2Z2, p), H, p);
+    let HH = fsqr(H, p);
+    let HHH = fmul(H, HH, p);
+    let V = fmul(U1, HH, p);
+    let X3 = fsub(fsub(fsub(fsqr(r, p), HHH, p), V, p), V, p);
+    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fmul(S1, HHH, p), p);
+    let Z3 = fmul(fmul(Z1, Z2, p), H, p);
 
     (X3, Y3, Z3);
   };

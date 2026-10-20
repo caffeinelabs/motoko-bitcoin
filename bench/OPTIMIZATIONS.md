@@ -22,6 +22,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Keep the field helpers private         |   68_401_510 |  +0.4% |    5.65 MiB |     0% |   185_044_210 |  +0.5% |     16_306_333 |  +0.4% |
 | Retire `ec_arith` benchmark            |   68_401_510 |     0% |    5.65 MiB |     0% |   185_044_210 |     0% |     16_312_000 |     0% |
 | wNAF recoding on `Nat64` words         |   60_580_051 | −11.4% |    5.24 MiB |  −7.3% |   170_790_134 |  −7.7% |     15_687_416 |  −3.8% |
+| Leaner addition formulas               |   59_210_804 |  −2.3% |    5.11 MiB |  −2.5% |   167_182_713 |  −2.1% |     15_642_194 |  −0.3% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -36,6 +37,7 @@ above):
 | Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 | +0.7% | 69_657_567 |  +0.2% |
 | Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 | +0.4% | 69_958_715 |  +0.4% |
 | wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 | −8.8% | 62_263_255 | −11.0% |
+| Leaner addition formulas          |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 | −1.3% | 61_152_465 |  −1.8% |
 
 Columns:
 
@@ -247,6 +249,18 @@ heap (its own benchmark, measured without `wasm-opt`).
     faster. The output is unchanged (the width-w NAF of a number is
     unique; checked against the old algorithm on more than 4,000 inputs and
     widths). Widths above 32 keep the bignum algorithm.
+
+15. **Leaner addition formulas.** Also from the comparison with
+    motoko_ecdsa. Our mixed and full additions (madd-2007-bl and
+    add-2007-bl) scale by 2 to save multiplications that only pay off when
+    a squaring is much cheaper than a multiplication: `I = 4·HH`,
+    `r = 2(S2 − S1)`, `2·V`, `2·Y1·J` and `Z3 = (Z1 + H)² − Z1Z1 − HH`. With
+    bignums a squaring costs about as much as a multiplication, so the H³
+    form, with the same 11 (mixed) and 16 (full) multiplications and about
+    half the additions and subtractions, is cheaper: measured in isolation,
+    a mixed addition 302.8k → 282.4k and a full one 423.2k → 403.7k
+    instructions. When H = 0 and r ≠ 0 (P2 = −P1) the formulas now return
+    the point at infinity directly.
 
 ## Tried and not adopted
 
