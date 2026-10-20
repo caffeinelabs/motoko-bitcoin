@@ -7,6 +7,7 @@ import Common "../../src/Common";
 import Curves "../../src/ec/Curves";
 import Hex "../Hex";
 import Jacobi "../../src/ec/Jacobi";
+import Numbers "../../src/ec/Numbers";
 import Secp256k1Generator "../../src/ec/Secp256k1Generator";
 import Secp256k1TestVectors "Secp256k1TestVectors";
 import TestUtils "../TestUtils";
@@ -236,19 +237,34 @@ runTest({
   vectors = mulAddVectors;
 });
 
-runTest({
-  title = "Precomputed secp256k1 generator tables";
-  fn = func(i : Nat) {
-    let curve = Curves.secp256k1;
-    let ?glv = curve.glv else Runtime.trap("secp256k1 has GLV parameters");
-    let k = 2 * i + 1;
-    let expected = Jacobi.mulBase(k, curve);
-    let expectedPhi = Jacobi.mulBase(glv.lambda * k % curve.r, curve);
+// Double-and-add with Jacobi.double and Jacobi.add only, independent of
+// the GLV and table code in Jacobi.mul.
+func doubleAndAdd(point : Jacobi.Point, k : Nat) : Jacobi.Point {
+  var acc : Jacobi.Point = #infinity(Curves.secp256k1);
+  for (bit in Numbers.toBinary(k).values()) {
+    acc := Jacobi.double(acc);
+    if (bit) acc := Jacobi.add(acc, point);
+  };
+  acc;
+};
+
+do {
+  let curve = Curves.secp256k1;
+  let ?glv = curve.glv else Runtime.trap("secp256k1 has GLV parameters");
+  let g = Jacobi.base(curve);
+  let twoG = Jacobi.double(g);
+  // phi(G) = (beta * x, y) must equal lambda * G.
+  let (phiX, phiY, _) = Secp256k1Generator.phiMultiples[0];
+  assert (Jacobi.isEqual(Jacobi.fromNat(phiX, phiY, 1, curve), doubleAndAdd(g, glv.lambda)));
+
+  var expected = g;
+  for (i in Nat.range(0, Secp256k1Generator.multiples.size())) {
     let (x, y, z) = Secp256k1Generator.multiples[i];
     let (px, py, pz) = Secp256k1Generator.phiMultiples[i];
     assert (z == 1 and pz == 1);
+    // (2i + 1) * G, built as G + 2G + ... + 2G.
     assert (Jacobi.isEqual(Jacobi.fromNat(x, y, 1, curve), expected));
-    assert (Jacobi.isEqual(Jacobi.fromNat(px, py, 1, curve), expectedPhi));
+    assert (px == glv.beta * x % curve.p and py == y);
+    expected := Jacobi.add(expected, twoG);
   };
-  vectors = Array.tabulate<Nat>(Secp256k1Generator.multiples.size(), func(i) = i);
-});
+};

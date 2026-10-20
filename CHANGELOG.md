@@ -38,6 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Field.mul()` reduces modulo the secp256k1 prime without a bignum
     division, and `Fp.sqrt()` uses an addition chain on secp256k1 (public key
     decompression −72%, BIP32 derivation −21.6%).
+  - `Jacobi.mul()` and `Jacobi.mulBase()` use the precomputed generator
+    tables (`mulBase` −19.8%, BIP32 derivation −17.4%).
 
 ## [0.2.3] - 2026-10-19
 

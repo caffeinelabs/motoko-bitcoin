@@ -16,15 +16,17 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Verify without affine conversion       |   83_714_883 |  −2.7% |    6.93 MiB |  −2.5% |   409_007_176 |     0% |     23_890_156 |     0% |
 | Precomputed tables for G (width 7)     |   72_794_211 | −13.0% |    5.98 MiB | −13.7% |   409_009_816 |     0% |     23_891_642 |     0% |
 | Square root by addition chain          |   72_813_632 |     0% |    5.99 MiB |     0% |   320_855_562 | −21.6% |     23_891_642 |     0% |
+| G tables in `mul` and `mulBase`        |   72_813_572 |     0% |    5.99 MiB |     0% |   264_985_466 | −17.4% |     16_946_046 | −29.1% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
 above):
 
-| Step                          | Decompress |      Δ |  `mulBase` |   Δ |      `mul` |     Δ |   `mulAdd` |     Δ |
-| :---------------------------- | ---------: | -----: | ---------: | --: | ---------: | ----: | ---------: | ----: |
-| Precomputed tables for G      | 24_419_901 |        | 56_959_886 |     | 59_227_618 |       | 73_905_529 |       |
-| Square root by addition chain |  6_772_845 | −72.3% | 56_945_858 |  0% | 59_170_259 | −0.1% | 73_853_875 | −0.1% |
+| Step                            | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |     Δ |   `mulAdd` |     Δ |
+| :------------------------------ | ---------: | -----: | ---------: | -----: | ---------: | ----: | ---------: | ----: |
+| Precomputed tables for G        | 24_419_901 |        | 56_959_886 |        | 59_227_618 |       | 73_905_529 |       |
+| Square root by addition chain   |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 | −0.1% | 73_853_875 | −0.1% |
+| G tables in `mul` and `mulBase` |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 | −0.3% |
 
 Columns:
 
@@ -149,6 +151,13 @@ heap (its own benchmark, measured without `wasm-opt`).
    through the same decompression in `Publickey.decode`, saves the same
    17.6M; `bench/ecdsa_verify.bench.mo` uses a parsed key and doesn't show
    it.
+
+9. **G tables in `mul` and `mulBase`.** `mul` now uses the precomputed
+   tables of step 7 whenever its point is the secp256k1 generator, like
+   `mulAdd` already did, so `mulBase` no longer builds G's tables on every
+   call and its additions are mixed additions with width 7. This speeds up
+   BIP32 derivation and signing. `mul` on other points is unchanged. The
+   `mul`, k < 2⁵⁷ column drops too, because that benchmark multiplies G.
 
 ## Tried and not adopted
 

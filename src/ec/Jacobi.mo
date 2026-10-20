@@ -189,7 +189,7 @@ module {
       case (#infinity(curve)) #infinity(curve);
       case (#point(x2, y2, _, curve)) {
         switch (curve.glv) {
-          case (?glv) return wnafSum(glvTerms(x2.value, y2.value, other, glv, curve), curve);
+          case (?glv) return wnafSum(pointTerms(x2.value, y2.value, other, glv, curve), curve);
           case null {};
         };
         var p : Coords = (0, 0, 1);
@@ -315,6 +315,29 @@ module {
     x == Curves.secp256k1.gx and y == Curves.secp256k1.gy and Curves.isEqual(curve, Curves.secp256k1);
   };
 
+  // The GLV terms of `scalar * P` for the affine point P = (x, y), using the
+  // precomputed tables if P is the secp256k1 generator.
+  func pointTerms(
+    x : Nat,
+    y : Nat,
+    scalar : Nat,
+    glv : Curves.Glv,
+    curve : Curves.Curve,
+  ) : [WnafTerm] {
+    if (isSecp256k1Generator(x, y, curve)) {
+      splitTerms(
+        scalar,
+        Secp256k1Generator.multiples,
+        Secp256k1Generator.phiMultiples,
+        Secp256k1Generator.window,
+        glv,
+        curve,
+      );
+    } else {
+      glvTerms(x, y, scalar, glv, curve);
+    };
+  };
+
   // Computes the sum of all `terms` with a Straus/Shamir-style interleaved
   // wNAF loop: the terms share one doubling per digit position, and each
   // non-zero digit adds one table entry.
@@ -369,20 +392,7 @@ module {
     func terms(point : Point, scalar : Nat) : [WnafTerm] {
       switch (scale(point)) {
         case (#infinity(_)) [];
-        case (#point(x, y, _, _)) {
-          if (isSecp256k1Generator(x.value, y.value, curve)) {
-            splitTerms(
-              scalar,
-              Secp256k1Generator.multiples,
-              Secp256k1Generator.phiMultiples,
-              Secp256k1Generator.window,
-              glv,
-              curve,
-            );
-          } else {
-            glvTerms(x.value, y.value, scalar, glv, curve);
-          };
-        };
+        case (#point(x, y, _, _)) pointTerms(x.value, y.value, scalar, glv, curve);
       };
     };
     let terms1 = terms(point1, a);
