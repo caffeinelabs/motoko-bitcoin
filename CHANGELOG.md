@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `Numbers.toWnaf()`, which computes width-`w` NAF digits.
+
 ### Changed
 
 - Speed up `Jacobi` point arithmetic on secp256k1. See
@@ -15,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A modular reduction specialized to the secp256k1 prime (verify −12.9%).
   - Field arithmetic on canonical `Nat` residues instead of signed `Int`
     values (verify −8.0%, verify heap −9.4%).
+  - Width-5 wNAF digits with tables of odd multiples in the GLV
+    multiplication (verify −8.1%, verify heap −8.3%).
 
 ## [0.2.3] - 2026-10-19
 

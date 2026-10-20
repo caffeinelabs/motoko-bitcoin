@@ -10,6 +10,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | 0.2.3 (GLV, `% p`)                     |  158_720_308 |        |    6.81 MiB |        |   521_699_275 |       |     29_921_334 |        |
 | Reduction specialized to secp256k1's p |  138_177_588 | −12.9% |   11.78 MiB | +73.0% |   469_896_817 | −9.9% |     26_035_801 | −13.0% |
 | Field arithmetic on `Nat` residues     |  127_092_370 |  −8.0% |   10.67 MiB |  −9.4% |   442_104_728 | −5.9% |     23_711_013 |  −8.9% |
+| Width-5 wNAF, Jacobian tables          |  116_817_125 |  −8.1% |    9.78 MiB |  −8.3% |   413_335_328 | −6.5% |     24_593_089 |  +3.7% |
 
 Columns:
 
@@ -42,3 +43,12 @@ heap (its own benchmark, measured without `wasm-opt`).
    p instead of a reduction. The formulas are unchanged. This also makes the
    doubling checks in the addition formulas exact: with signed values, a
    difference congruent to 0 but equal to ±p wasn't recognized.
+3. **Width-5 wNAF, Jacobian tables.** The GLV loop used width-2 NAF digits,
+   so on average one digit in three needed a point addition. Now each half
+   scalar is written in width-5 NAF (one addition per six digits, about 43
+   per half instead of about 86), against a table of the odd multiples
+   P, 3P, …, 15P and their images under the endomorphism. The tables stay in
+   Jacobian coordinates, so each addition is a full addition rather than the
+   cheaper mixed one. Building the tables costs one doubling and seven
+   additions per multiplication, which is why short scalars (the `mul`
+   column) get slower. Widths 4 and 6 measured 118.6M and 119.0M for verify.

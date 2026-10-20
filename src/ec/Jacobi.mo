@@ -18,6 +18,7 @@
 import Int "mo:core/Int";
 import Nat "mo:core/Nat";
 import Runtime "mo:core/Runtime";
+import VarArray "mo:core/VarArray";
 
 import Affine "Affine";
 import Curves "Curves";
@@ -30,6 +31,9 @@ module {
   // Internal Jacobian coordinates: canonical residues in [0, p). A point
   // with Y = 0 or Z = 0 is the point at infinity.
   type Coords = (Nat, Nat, Nat);
+
+  // Window width of the wNAF digits in GLV scalar multiplication.
+  let GLV_WINDOW : Nat = 5;
 
   let SECP256K1_P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
   // 2^256 - p = 2^32 + 977
@@ -229,8 +233,9 @@ module {
   /// Scalar multiplication using the GLV endomorphism. Decomposes the scalar
   /// `k mod r` into `(k1, k2)` such that `k1 + lambda * k2 == k (mod r)` and
   /// both halves are roughly half the bit-length of `r`. Then computes
-  /// `k1 * P + k2 * phi(P)` with a Straus/Shamir-style interleaved-NAF loop,
-  /// where `phi(X, Y, Z) = (beta * X, Y, Z)` in Jacobian coordinates.
+  /// `k1 * P + k2 * phi(P)` with a Straus/Shamir-style interleaved wNAF loop
+  /// over tables of odd multiples of `P` and `phi(P)`, where
+  /// `phi(X, Y, Z) = (beta * X, Y, Z)` in Jacobian coordinates.
   /// Caller guarantees `(x, y)` is the affine representation (Z=1) of P and
   /// that `scalar != 0`.
   func mulGlv(
@@ -258,43 +263,48 @@ module {
     let absK1 = Int.abs(k1);
     let absK2 = Int.abs(k2);
 
-    let p1x = x.value;
-    let yPos = y.value;
-    let yNeg = y.neg().value;
-    let p1y = if (k1 < 0) yNeg else yPos;
-    let p1yAlt = if (k1 < 0) yPos else yNeg;
-    let p2x = x.mul(curve.Fp(glv.beta)).value;
-    let p2y = if (k2 < 0) yNeg else yPos;
-    let p2yAlt = if (k2 < 0) yPos else yNeg;
+    let (a, fp) = (curve.a, curve.p);
 
-    let naf1 = Numbers.toNaf(absK1);
-    let naf2 = Numbers.toNaf(absK2);
+    // Odd multiples P, 3P, ..., (2^(w-1) - 1)P of P = (x, y), and their
+    // images under phi(X, Y, Z) = (beta * X, Y, Z).
+    let tableSize = 2 ** (GLV_WINDOW - 2 : Nat);
+    let table1 = VarArray.repeat<Coords>((x.value, y.value, 1), tableSize);
+    let twoP = doubleWithZ1(x.value, y.value, a, fp);
+    for (i in Nat.range(1, tableSize)) {
+      let q = table1[i - 1];
+      table1[i] := _add(q.0, q.1, q.2, twoP.0, twoP.1, twoP.2, a, fp);
+    };
+    let beta = glv.beta % fp;
+    let table2 = VarArray.tabulate<Coords>(
+      tableSize,
+      func(i) {
+        let q = table1[i];
+        (fmul(beta, q.0, fp), q.1, q.2);
+      },
+    );
+
+    let naf1 = Numbers.toWnaf(absK1, GLV_WINDOW);
+    let naf2 = Numbers.toWnaf(absK2, GLV_WINDOW);
     let len = if (naf1.size() > naf2.size()) naf1.size() else naf2.size();
 
-    var p : Coords = (0, 0, 1);
-    for (i in Nat.rangeByInclusive(len - 1, 0, -1)) {
-      p := doDouble(p.0, p.1, p.2, curve.a, curve.p);
-      if (i < naf1.size()) {
-        let d : Int = naf1[i];
-        if (d > 0) {
-          p := _add(p.0, p.1, p.2, p1x, p1y, 1, curve.a, curve.p);
-        } else if (d < 0) {
-          p := _add(p.0, p.1, p.2, p1x, p1yAlt, 1, curve.a, curve.p);
-        };
-      };
-      if (i < naf2.size()) {
-        let d : Int = naf2[i];
-        if (d > 0) {
-          p := _add(p.0, p.1, p.2, p2x, p2y, 1, curve.a, curve.p);
-        } else if (d < 0) {
-          p := _add(p.0, p.1, p.2, p2x, p2yAlt, 1, curve.a, curve.p);
-        };
-      };
+    // Adds `d * Q` for a table of odd multiples of Q, negated if `negative`.
+    func addDigit(acc : Coords, table : [var Coords], d : Int, negative : Bool) : Coords {
+      if (d == 0) return acc;
+      let q = table[Int.abs(d) / 2];
+      let qy = if ((d < 0) != negative) fsub(0, q.1, fp) else q.1;
+      _add(acc.0, acc.1, acc.2, q.0, qy, q.2, a, fp);
     };
-    if (p.1 == 0 or p.2 == 0) {
+
+    var acc : Coords = (0, 0, 1);
+    for (i in Nat.rangeByInclusive(len - 1, 0, -1)) {
+      acc := doDouble(acc.0, acc.1, acc.2, a, fp);
+      if (i < naf1.size()) acc := addDigit(acc, table1, naf1[i], k1 < 0);
+      if (i < naf2.size()) acc := addDigit(acc, table2, naf2[i], k2 < 0);
+    };
+    if (acc.1 == 0 or acc.2 == 0) {
       return #infinity(curve);
     };
-    #point(curve.Fp(p.0), curve.Fp(p.1), curve.Fp(p.2), curve);
+    #point(curve.Fp(acc.0), curve.Fp(acc.1), curve.Fp(acc.2), curve);
   };
 
   /// Multiplies the curve generator by scalar `other`.

@@ -6,6 +6,7 @@
 
 import Array "mo:core/Array";
 import List "mo:core/List";
+import Runtime "mo:core/Runtime";
 
 module {
   // Extended Euclidean Algorithm.
@@ -73,6 +74,42 @@ module {
         };
         output.add(nd);
         input -= nd;
+      } else {
+        output.add(0);
+      };
+      input /= 2;
+    };
+
+    output.toArray();
+  };
+
+  /// Computes the width-`w` non-adjacent form (wNAF) digits of `n`.
+  ///
+  /// Every non-zero digit is odd with absolute value below `2^(w - 1)`, and
+  /// any two non-zero digits are at least `w` positions apart, so on average
+  /// only one digit in `w + 1` is non-zero. Scalar multiplication with a
+  /// table of the odd multiples `P, 3P, ..., (2^(w - 1) - 1)P` then needs one
+  /// point addition per non-zero digit. `toWnaf(n, 2)` equals `toNaf(n)`.
+  ///
+  /// The result is least-significant-digit first. Returns the empty array
+  /// `[]` when `n == 0`. Traps if `w < 2`.
+  public func toWnaf(n : Int, w : Nat) : [Int] {
+    if (w < 2) Runtime.trap("toWnaf: width must be at least 2");
+    let modulus : Int = 2 ** w;
+    let half : Int = modulus / 2;
+    var input : Int = n;
+    let output = List.empty<Int>();
+
+    while (input != 0) {
+      if (input % 2 != 0) {
+        var digit : Int = input % modulus;
+        if (digit >= half) {
+          digit -= modulus;
+        } else if (digit < -half) {
+          digit += modulus;
+        };
+        output.add(digit);
+        input -= digit;
       } else {
         output.add(0);
       };
