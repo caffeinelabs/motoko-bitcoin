@@ -16,6 +16,14 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Verify without affine conversion       |   83_714_883 |  −2.7% |    6.93 MiB |  −2.5% |   409_007_176 |    0% |     23_890_156 |     0% |
 | Precomputed tables for G (width 7)     |   72_794_211 | −13.0% |    5.98 MiB | −13.7% |   409_009_816 |    0% |     23_891_642 |     0% |
 
+Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
+also measures full-size operations on secp256k1 (instructions; Δ vs the row
+above):
+
+| Step                     | Decompress |   Δ |  `mulBase` |   Δ |      `mul` |   Δ |   `mulAdd` |   Δ |
+| :----------------------- | ---------: | --: | ---------: | --: | ---------: | --: | ---------: | --: |
+| Precomputed tables for G | 24_419_901 |     | 56_959_886 |     | 59_227_618 |     | 73_905_529 |     |
+
 Columns:
 
 - **ECDSA verify**: instructions for `verify (preparsed)`, sample 0, in
@@ -27,6 +35,9 @@ Columns:
 - **`mul`, k < 2⁵⁷**: instructions for `mulPoint`, `k large`, in
   `bench/ec_arith.bench.mo`. Its scalars are below 2⁵⁷, so it doesn't show
   gains that only apply to full-size scalars, such as GLV.
+- **Decompress**: `Jacobi.fromBytes` on a compressed public key, which
+  computes a square root. **`mulBase`**, **`mul`**, **`mulAdd`**: 256-bit
+  scalars, including the final conversion to affine coordinates.
 
 For reference, [motoko_ecdsa](https://github.com/edjCase/motoko_ecdsa) 8.0.2
 verifies a secp256k1 signature in 110_018_892 instructions with 5.41 MiB of
