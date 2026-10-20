@@ -7,6 +7,7 @@ import Common "../../src/Common";
 import Curves "../../src/ec/Curves";
 import Hex "../Hex";
 import Jacobi "../../src/ec/Jacobi";
+import Secp256k1Generator "../../src/ec/Secp256k1Generator";
 import Secp256k1TestVectors "Secp256k1TestVectors";
 import TestUtils "../TestUtils";
 import WycheproofEcdhTestVectors "wycheproofEcdhTestVectors";
@@ -233,4 +234,21 @@ runTest({
   title = "Combined multiplication a * P1 + b * P2";
   fn = testMulAdd;
   vectors = mulAddVectors;
+});
+
+runTest({
+  title = "Precomputed secp256k1 generator tables";
+  fn = func(i : Nat) {
+    let curve = Curves.secp256k1;
+    let ?glv = curve.glv else Runtime.trap("secp256k1 has GLV parameters");
+    let k = 2 * i + 1;
+    let expected = Jacobi.mulBase(k, curve);
+    let expectedPhi = Jacobi.mulBase(glv.lambda * k % curve.r, curve);
+    let (x, y, z) = Secp256k1Generator.multiples[i];
+    let (px, py, pz) = Secp256k1Generator.phiMultiples[i];
+    assert (z == 1 and pz == 1);
+    assert (Jacobi.isEqual(Jacobi.fromNat(x, y, 1, curve), expected));
+    assert (Jacobi.isEqual(Jacobi.fromNat(px, py, 1, curve), expectedPhi));
+  };
+  vectors = Array.tabulate<Nat>(Secp256k1Generator.multiples.size(), func(i) = i);
 });

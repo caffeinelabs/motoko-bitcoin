@@ -25,6 +25,7 @@ import Affine "Affine";
 import Curves "Curves";
 import BaseFp "Fp";
 import Numbers "Numbers";
+import Secp256k1Generator "Secp256k1Generator";
 
 module {
   type Fp = BaseFp.Fp;
@@ -236,25 +237,18 @@ module {
   // k is negative.
   type WnafTerm = {
     digits : [Int];
-    table : [var Coords];
+    table : [Coords];
     negative : Bool;
   };
 
-  // Splits `scalar * P` for the affine point P = (x, y) into the two terms
-  // `k1 * P + k2 * phi(P)` of the GLV endomorphism, where `scalar mod r`
-  // equals `k1 + lambda * k2` and both halves have roughly half the
-  // bit-length of r. Returns no terms if `scalar mod r == 0`.
-  func glvTerms(
-    x : Nat,
-    y : Nat,
-    scalar : Nat,
-    glv : Curves.Glv,
-    curve : Curves.Curve,
-  ) : [WnafTerm] {
+  // Splits `scalar mod r` into `(k1, k2)` with `k1 + lambda * k2 == scalar`
+  // (mod r) and both halves roughly half the bit-length of r. Returns null
+  // if `scalar mod r == 0`.
+  func glvSplit(scalar : Nat, glv : Curves.Glv, curve : Curves.Curve) : ?(Int, Int) {
     let n : Int = curve.r;
     let k : Int = scalar % curve.r;
     if (k == 0) {
-      return [];
+      return null;
     };
     let halfN : Int = n / 2;
 
@@ -265,7 +259,44 @@ module {
     let c2 : Int = (-glv.b1 * k + halfN) / n;
     let k1 : Int = k - c1 * glv.a1 - c2 * glv.a2;
     let k2 : Int = -c1 * glv.b1 - c2 * glv.b2;
+    ?(k1, k2);
+  };
 
+  // The two wNAF terms `k1 * T[0] + k2 * U[0]` for the GLV split of
+  // `scalar`, given tables T of the odd multiples of a point P and U of
+  // phi(P), built for wNAF width `window`.
+  func splitTerms(
+    scalar : Nat,
+    table1 : [Coords],
+    table2 : [Coords],
+    window : Nat,
+    glv : Curves.Glv,
+    curve : Curves.Curve,
+  ) : [WnafTerm] {
+    let ?(k1, k2) = glvSplit(scalar, glv, curve) else return [];
+    [
+      {
+        digits = Numbers.toWnaf(Int.abs(k1), window);
+        table = table1;
+        negative = k1 < 0;
+      },
+      {
+        digits = Numbers.toWnaf(Int.abs(k2), window);
+        table = table2;
+        negative = k2 < 0;
+      },
+    ];
+  };
+
+  // The two GLV terms `k1 * P + k2 * phi(P)` of `scalar * P` for the affine
+  // point P = (x, y). Builds the tables of odd multiples on every call.
+  func glvTerms(
+    x : Nat,
+    y : Nat,
+    scalar : Nat,
+    glv : Curves.Glv,
+    curve : Curves.Curve,
+  ) : [WnafTerm] {
     let (a, fp) = (curve.a, curve.p);
 
     // Odd multiples of P, and their images under
@@ -278,26 +309,20 @@ module {
       table1[i] := _add(q.0, q.1, q.2, twoP.0, twoP.1, twoP.2, a, fp);
     };
     let beta = glv.beta % fp;
-    let table2 = VarArray.tabulate<Coords>(
+    let table2 = Array.tabulate<Coords>(
       tableSize,
       func(i) {
         let q = table1[i];
         (fmul(beta, q.0, fp), q.1, q.2);
       },
     );
+    splitTerms(scalar, table1.toArray(), table2, GLV_WINDOW, glv, curve);
+  };
 
-    [
-      {
-        digits = Numbers.toWnaf(Int.abs(k1), GLV_WINDOW);
-        table = table1;
-        negative = k1 < 0;
-      },
-      {
-        digits = Numbers.toWnaf(Int.abs(k2), GLV_WINDOW);
-        table = table2;
-        negative = k2 < 0;
-      },
-    ];
+  // True if (x, y) is the generator of secp256k1, for which precomputed
+  // tables exist.
+  func isSecp256k1Generator(x : Nat, y : Nat, curve : Curves.Curve) : Bool {
+    x == Curves.secp256k1.gx and y == Curves.secp256k1.gy and Curves.isEqual(curve, Curves.secp256k1);
   };
 
   // Computes the sum of all `terms` with a Straus/Shamir-style interleaved
@@ -337,7 +362,8 @@ module {
   ///
   /// Gives the same result as `add(mul(point1, a), mul(point2, b))`. On
   /// curves with GLV parameters (secp256k1) it is faster, because both
-  /// multiplications share one doubling per bit of the half-length scalars.
+  /// multiplications share one doubling per bit of the half-length scalars,
+  /// and a point that is the secp256k1 generator uses precomputed tables.
   /// This is the operation at the heart of ECDSA verification.
   ///
   /// Traps with `"Cannot add two points on different curves"` when
@@ -353,7 +379,20 @@ module {
     func terms(point : Point, scalar : Nat) : [WnafTerm] {
       switch (scale(point)) {
         case (#infinity(_)) [];
-        case (#point(x, y, _, _)) glvTerms(x.value, y.value, scalar, glv, curve);
+        case (#point(x, y, _, _)) {
+          if (isSecp256k1Generator(x.value, y.value, curve)) {
+            splitTerms(
+              scalar,
+              Secp256k1Generator.multiples,
+              Secp256k1Generator.phiMultiples,
+              Secp256k1Generator.window,
+              glv,
+              curve,
+            );
+          } else {
+            glvTerms(x.value, y.value, scalar, glv, curve);
+          };
+        };
       };
     };
     let terms1 = terms(point1, a);

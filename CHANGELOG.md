@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `Numbers.toWnaf()`, which computes width-`w` NAF digits.
 - Add `Jacobi.mulAdd()`, which computes `a * P1 + b * P2` faster than two
   separate multiplications.
+- Add `Secp256k1Generator`, precomputed multiples of the secp256k1 generator
+  used by `Jacobi.mulAdd()`.
 
 ### Changed
 
@@ -29,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     division per step (one inversion −22%, verify −1.6%).
   - ECDSA verification compares the result in Jacobian coordinates and no
     longer converts it to affine coordinates (verify −2.7%).
+  - Precomputed tables of the secp256k1 generator for the `G` half of
+    verification (verify −13.0%, verify heap −13.7%; Wasm +21 KB).
 
 ## [0.2.3] - 2026-10-19
 
