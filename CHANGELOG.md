@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     decompression −72%, BIP32 derivation −21.6%).
   - `Jacobi.mul()` and `Jacobi.mulBase()` use the precomputed generator
     tables (`mulBase` −19.8%, BIP32 derivation −17.4%).
+  - A cheaper point doubling for curves with a = 0 (verify −5.7%, BIP32
+    derivation −7.7%, `mulBase` −9.2%).
 
 ## [0.2.3] - 2026-10-19
 

@@ -450,19 +450,18 @@ module {
     let XX = fsqr(X1, p);
     let YY = fsqr(Y1, p);
     let YYYY = fsqr(YY, p);
-    let ZZ = fsqr(Z1, p);
-    // S = 2 * ((X1 + YY)^2 - XX - YYYY)
-    let S = fdbl(fsub(fsub(fsqr(fadd(X1, YY, p), p), XX, p), YYYY, p), p);
-    // M = 3 * XX + a * ZZ^2
+    // S = 4 * X1 * YY
+    let S = fdbl(fdbl(fmul(X1, YY, p), p), p);
+    // M = 3 * XX + a * Z1^4; for a = 0 (secp256k1) Z1^2 isn't needed.
     var M = fadd(fdbl(XX, p), XX, p);
     if (a != 0) {
-      M := fadd(M, fmul(a, fsqr(ZZ, p), p), p);
+      M := fadd(M, fmul(a, fsqr(fsqr(Z1, p), p), p), p);
     };
     let T = fsub(fsqr(M, p), fdbl(S, p), p);
     // Y3 = M * (S - T) - 8 * YYYY
     let Y3 = fsub(fmul(M, fsub(S, T, p), p), fdbl(fdbl(fdbl(YYYY, p), p), p), p);
-    // Z3 = (Y1 + Z1)^2 - YY - ZZ
-    let Z3 = fsub(fsub(fsqr(fadd(Y1, Z1, p), p), YY, p), ZZ, p);
+    // Z3 = 2 * Y1 * Z1
+    let Z3 = fdbl(fmul(Y1, Z1, p), p);
 
     (T, Y3, Z3);
   };
@@ -475,7 +474,7 @@ module {
     let XX = fsqr(X1, p);
     let YY = fsqr(Y1, p);
     let YYYY = fsqr(YY, p);
-    let S = fdbl(fsub(fsub(fsqr(fadd(X1, YY, p), p), XX, p), YYYY, p), p);
+    let S = fdbl(fdbl(fmul(X1, YY, p), p), p);
     let M = fadd(fadd(fdbl(XX, p), XX, p), a, p);
     let T = fsub(fsqr(M, p), fdbl(S, p), p);
     let Y3 = fsub(fmul(M, fsub(S, T, p), p), fdbl(fdbl(fdbl(YYYY, p), p), p), p);

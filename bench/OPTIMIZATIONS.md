@@ -15,8 +15,9 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Iterative field inversion              |   86_057_048 |  −1.6% |    7.11 MiB |  −1.0% |   409_007_176 |  −0.9% |     23_890_156 |  −2.9% |
 | Verify without affine conversion       |   83_714_883 |  −2.7% |    6.93 MiB |  −2.5% |   409_007_176 |     0% |     23_890_156 |     0% |
 | Precomputed tables for G (width 7)     |   72_794_211 | −13.0% |    5.98 MiB | −13.7% |   409_009_816 |     0% |     23_891_642 |     0% |
-| Square root by addition chain          |   72_813_632 |     0% |    5.99 MiB |     0% |   320_855_562 | −21.6% |     23_891_642 |     0% |
-| G tables in `mul` and `mulBase`        |   72_813_572 |     0% |    5.99 MiB |     0% |   264_985_466 | −17.4% |     16_946_046 | −29.1% |
+| Square root by addition chain          |   72_813_632 |     0% |    5.99 MiB |     0% |   320_855_562 | −21.6% |     23_865_696 |  −0.1% |
+| G tables in `mul` and `mulBase`        |   72_813_572 |     0% |    5.99 MiB |     0% |   264_985_466 | −17.4% |     16_946_046 | −29.0% |
+| Doubling formula for a = 0             |   68_677_192 |  −5.7% |    5.62 MiB |  −6.2% |   244_672_531 |  −7.7% |     15_302_557 |  −9.7% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -27,6 +28,7 @@ above):
 | Precomputed tables for G        | 24_419_901 |        | 56_959_886 |        | 59_227_618 |       | 73_905_529 |       |
 | Square root by addition chain   |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 | −0.1% | 73_853_875 | −0.1% |
 | G tables in `mul` and `mulBase` |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 | −0.3% |
+| Doubling formula for a = 0      |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 | −7.0% | 69_493_523 | −5.6% |
 
 Columns:
 
@@ -158,6 +160,15 @@ heap (its own benchmark, measured without `wasm-opt`).
    call and its additions are mixed additions with width 7. This speeds up
    BIP32 derivation and signing. `mul` on other points is unchanged. The
    `mul`, k < 2⁵⁷ column drops too, because that benchmark multiplies G.
+
+10. **Doubling formula for a = 0.** On secp256k1 a = 0, but the doubling
+    still computed Z², and it formed Z3 as (Y + Z)² − YY − ZZ and S as
+    2((X + YY)² − XX − YYYY). The new formula (dbl-2009-l) computes
+    S = 4·X·YY and Z3 = 2·Y·Z directly and skips Z² unless a ≠ 0: seven
+    multiplications instead of eight, and four fewer subtractions. With
+    bignums a multiplication costs about as much as a squaring, so the
+    squaring tricks only added work. Every full-size multiplication does
+    about 129 doublings, so this shows up everywhere.
 
 ## Tried and not adopted
 
