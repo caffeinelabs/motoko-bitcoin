@@ -11,6 +11,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Reduction specialized to secp256k1's p |  138_177_588 | −12.9% |   11.78 MiB | +73.0% |   469_896_817 | −9.9% |     26_035_801 | −13.0% |
 | Field arithmetic on `Nat` residues     |  127_092_370 |  −8.0% |   10.67 MiB |  −9.4% |   442_104_728 | −5.9% |     23_711_013 |  −8.9% |
 | Width-5 wNAF, Jacobian tables          |  116_817_125 |  −8.1% |    9.78 MiB |  −8.3% |   413_335_328 | −6.5% |     24_593_089 |  +3.7% |
+| Combined multiplication in verify      |   87_478_767 | −25.1% |    7.18 MiB | −26.6% |   412_601_208 | −0.2% |     24_599_742 |     0% |
 
 Columns:
 
@@ -52,6 +53,13 @@ heap (its own benchmark, measured without `wasm-opt`).
    cheaper mixed one. Building the tables costs one doubling and seven
    additions per multiplication, which is why short scalars (the `mul`
    column) get slower. Widths 4 and 6 measured 118.6M and 119.0M for verify.
+
+4. **Combined multiplication in verify.** ECDSA verification computes
+   u1·G + u2·Q. Instead of two separate GLV multiplications, the new
+   `Jacobi.mulAdd()` runs one interleaved wNAF loop over all four
+   half-length scalars, so the two multiplications share one set of about
+   129 doublings instead of needing about 258. BIP32 derivation and `mul`
+   are single multiplications and don't change.
 
 ## Tried and not adopted
 

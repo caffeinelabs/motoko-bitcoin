@@ -15,6 +15,7 @@
 //
 // Therefore, DO NOT use this code for any operations involving secrets.
 
+import Array "mo:core/Array";
 import Int "mo:core/Int";
 import Nat "mo:core/Nat";
 import Runtime "mo:core/Runtime";
@@ -197,7 +198,7 @@ module {
       case (#infinity(curve)) #infinity(curve);
       case (#point(x2, y2, _, curve)) {
         switch (curve.glv) {
-          case (?glv) return mulGlv(x2, y2, other, glv, curve);
+          case (?glv) return wnafSum(glvTerms(x2.value, y2.value, other, glv, curve), curve);
           case null {};
         };
         var p : Coords = (0, 0, 1);
@@ -230,25 +231,30 @@ module {
     };
   };
 
-  /// Scalar multiplication using the GLV endomorphism. Decomposes the scalar
-  /// `k mod r` into `(k1, k2)` such that `k1 + lambda * k2 == k (mod r)` and
-  /// both halves are roughly half the bit-length of `r`. Then computes
-  /// `k1 * P + k2 * phi(P)` with a Straus/Shamir-style interleaved wNAF loop
-  /// over tables of odd multiples of `P` and `phi(P)`, where
-  /// `phi(X, Y, Z) = (beta * X, Y, Z)` in Jacobian coordinates.
-  /// Caller guarantees `(x, y)` is the affine representation (Z=1) of P and
-  /// that `scalar != 0`.
-  func mulGlv(
-    x : Fp,
-    y : Fp,
+  // One term `k * Q` of a multi-scalar multiplication: the wNAF digits of
+  // |k|, a table of the odd multiples Q, 3Q, ..., (2^(w-1) - 1)Q, and whether
+  // k is negative.
+  type WnafTerm = {
+    digits : [Int];
+    table : [var Coords];
+    negative : Bool;
+  };
+
+  // Splits `scalar * P` for the affine point P = (x, y) into the two terms
+  // `k1 * P + k2 * phi(P)` of the GLV endomorphism, where `scalar mod r`
+  // equals `k1 + lambda * k2` and both halves have roughly half the
+  // bit-length of r. Returns no terms if `scalar mod r == 0`.
+  func glvTerms(
+    x : Nat,
+    y : Nat,
     scalar : Nat,
     glv : Curves.Glv,
     curve : Curves.Curve,
-  ) : Point {
+  ) : [WnafTerm] {
     let n : Int = curve.r;
     let k : Int = scalar % curve.r;
     if (k == 0) {
-      return #infinity(curve);
+      return [];
     };
     let halfN : Int = n / 2;
 
@@ -260,16 +266,13 @@ module {
     let k1 : Int = k - c1 * glv.a1 - c2 * glv.a2;
     let k2 : Int = -c1 * glv.b1 - c2 * glv.b2;
 
-    let absK1 = Int.abs(k1);
-    let absK2 = Int.abs(k2);
-
     let (a, fp) = (curve.a, curve.p);
 
-    // Odd multiples P, 3P, ..., (2^(w-1) - 1)P of P = (x, y), and their
-    // images under phi(X, Y, Z) = (beta * X, Y, Z).
+    // Odd multiples of P, and their images under
+    // phi(X, Y, Z) = (beta * X, Y, Z).
     let tableSize = 2 ** (GLV_WINDOW - 2 : Nat);
-    let table1 = VarArray.repeat<Coords>((x.value, y.value, 1), tableSize);
-    let twoP = doubleWithZ1(x.value, y.value, a, fp);
+    let table1 = VarArray.repeat<Coords>((x, y, 1), tableSize);
+    let twoP = doubleWithZ1(x, y, a, fp);
     for (i in Nat.range(1, tableSize)) {
       let q = table1[i - 1];
       table1[i] := _add(q.0, q.1, q.2, twoP.0, twoP.1, twoP.2, a, fp);
@@ -283,28 +286,79 @@ module {
       },
     );
 
-    let naf1 = Numbers.toWnaf(absK1, GLV_WINDOW);
-    let naf2 = Numbers.toWnaf(absK2, GLV_WINDOW);
-    let len = if (naf1.size() > naf2.size()) naf1.size() else naf2.size();
+    [
+      {
+        digits = Numbers.toWnaf(Int.abs(k1), GLV_WINDOW);
+        table = table1;
+        negative = k1 < 0;
+      },
+      {
+        digits = Numbers.toWnaf(Int.abs(k2), GLV_WINDOW);
+        table = table2;
+        negative = k2 < 0;
+      },
+    ];
+  };
 
-    // Adds `d * Q` for a table of odd multiples of Q, negated if `negative`.
-    func addDigit(acc : Coords, table : [var Coords], d : Int, negative : Bool) : Coords {
-      if (d == 0) return acc;
-      let q = table[Int.abs(d) / 2];
-      let qy = if ((d < 0) != negative) fsub(0, q.1, fp) else q.1;
-      _add(acc.0, acc.1, acc.2, q.0, qy, q.2, a, fp);
+  // Computes the sum of all `terms` with a Straus/Shamir-style interleaved
+  // wNAF loop: the terms share one doubling per digit position, and each
+  // non-zero digit adds one table entry.
+  func wnafSum(terms : [WnafTerm], curve : Curves.Curve) : Point {
+    let (a, fp) = (curve.a, curve.p);
+    var len = 0;
+    for (term in terms.values()) {
+      if (term.digits.size() > len) len := term.digits.size();
+    };
+    if (len == 0) {
+      return #infinity(curve);
     };
 
     var acc : Coords = (0, 0, 1);
     for (i in Nat.rangeByInclusive(len - 1, 0, -1)) {
       acc := doDouble(acc.0, acc.1, acc.2, a, fp);
-      if (i < naf1.size()) acc := addDigit(acc, table1, naf1[i], k1 < 0);
-      if (i < naf2.size()) acc := addDigit(acc, table2, naf2[i], k2 < 0);
+      for (term in terms.values()) {
+        if (i < term.digits.size()) {
+          let d = term.digits[i];
+          if (d != 0) {
+            let q = term.table[Int.abs(d) / 2];
+            let qy = if ((d < 0) != term.negative) fsub(0, q.1, fp) else q.1;
+            acc := _add(acc.0, acc.1, acc.2, q.0, qy, q.2, a, fp);
+          };
+        };
+      };
     };
     if (acc.1 == 0 or acc.2 == 0) {
       return #infinity(curve);
     };
     #point(curve.Fp(acc.0), curve.Fp(acc.1), curve.Fp(acc.2), curve);
+  };
+
+  /// Computes `a * point1 + b * point2`.
+  ///
+  /// Gives the same result as `add(mul(point1, a), mul(point2, b))`. On
+  /// curves with GLV parameters (secp256k1) it is faster, because both
+  /// multiplications share one doubling per bit of the half-length scalars.
+  /// This is the operation at the heart of ECDSA verification.
+  ///
+  /// Traps with `"Cannot add two points on different curves"` when
+  /// `point1` and `point2` belong to different curves. Otherwise never
+  /// traps; zero scalars and points at infinity are handled.
+  public func mulAdd(point1 : Point, a : Nat, point2 : Point, b : Nat) : Point {
+    let curve = getCurve(point1);
+    if (not Curves.isEqual(curve, getCurve(point2))) {
+      Runtime.trap("Cannot add two points on different curves");
+    };
+    let ?glv = curve.glv else return add(mul(point1, a), mul(point2, b));
+
+    func terms(point : Point, scalar : Nat) : [WnafTerm] {
+      switch (scale(point)) {
+        case (#infinity(_)) [];
+        case (#point(x, y, _, _)) glvTerms(x.value, y.value, scalar, glv, curve);
+      };
+    };
+    let terms1 = terms(point1, a);
+    let terms2 = terms(point2, b);
+    wnafSum(terms1.concat(terms2), curve);
   };
 
   /// Multiplies the curve generator by scalar `other`.

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add `Numbers.toWnaf()`, which computes width-`w` NAF digits.
+- Add `Jacobi.mulAdd()`, which computes `a * P1 + b * P2` faster than two
+  separate multiplications.
 
 ### Changed
 
@@ -21,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     values (verify −8.0%, verify heap −9.4%).
   - Width-5 wNAF digits with tables of odd multiples in the GLV
     multiplication (verify −8.1%, verify heap −8.3%).
+  - ECDSA verification computes `u1 * G + u2 * Q` with one combined
+    multiplication (verify −25.1%, verify heap −26.6%).
 
 ## [0.2.3] - 2026-10-19
 

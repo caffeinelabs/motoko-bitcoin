@@ -59,9 +59,11 @@ module {
 
     return switch (
       Jacobi.toAffine(
-        Jacobi.add(
-          Jacobi.mulBase(a.value, curve),
-          Jacobi.mul(Jacobi.fromAffine(#point(x, y, curve)), b.value),
+        Jacobi.mulAdd(
+          Jacobi.base(curve),
+          a.value,
+          Jacobi.fromAffine(#point(x, y, curve)),
+          b.value,
         )
       )
     ) {
