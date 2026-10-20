@@ -57,22 +57,25 @@ module {
     let a : Fp.Fp = h.mul(sInverse);
     let b : Fp.Fp = r.mul(sInverse);
 
-    return switch (
-      Jacobi.toAffine(
-        Jacobi.mulAdd(
-          Jacobi.base(curve),
-          a.value,
-          Jacobi.fromAffine(#point(x, y, curve)),
-          b.value,
-        )
-      )
-    ) {
-      case (#point(x2, _, _)) {
-        r.isEqual(Fp.Fp(x2.value, curve.r));
-      };
-      case _ {
-        false;
-      };
+    let sum = Jacobi.mulAdd(
+      Jacobi.base(curve),
+      a.value,
+      Jacobi.fromAffine(#point(x, y, curve)),
+      b.value,
+    );
+    if (Jacobi.isInfinity(sum)) {
+      return false;
     };
+    let #point(x2, _, z2, _) = sum else return false;
+
+    // The signature is valid iff x mod n == r for the affine x = X / Z^2 of
+    // the sum. Because x < p < 2n, that means x == r, or x == r + n when
+    // r + n < p. Comparing X with r * Z^2 avoids inverting Z.
+    let zz = z2.sqr();
+    if (x2.isEqual(curve.Fp(signature.r).mul(zz))) {
+      return true;
+    };
+    let rPlusN = signature.r + curve.r;
+    rPlusN < curve.p and x2.isEqual(curve.Fp(rPlusN).mul(zz));
   };
 };

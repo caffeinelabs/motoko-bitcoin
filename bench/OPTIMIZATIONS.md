@@ -13,6 +13,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Width-5 wNAF, Jacobian tables          |  116_817_125 |  −8.1% |    9.78 MiB |  −8.3% |   413_335_328 | −6.5% |     24_593_089 |  +3.7% |
 | Combined multiplication in verify      |   87_478_767 | −25.1% |    7.18 MiB | −26.6% |   412_601_208 | −0.2% |     24_599_742 |     0% |
 | Iterative field inversion              |   86_057_048 |  −1.6% |    7.11 MiB |  −1.0% |   409_007_176 | −0.9% |     23_890_156 |  −2.9% |
+| Verify without affine conversion       |   83_714_883 |  −2.7% |    6.93 MiB |  −2.5% |   409_007_176 |    0% |     23_890_156 |     0% |
 
 Columns:
 
@@ -70,6 +71,14 @@ heap (its own benchmark, measured without `wasm-opt`).
    (s⁻¹ mod n and the final conversion to affine coordinates). A binary GCD
    (shifts and subtractions only) measured 18.6M, six times slower, because
    it needs many more bignum operations.
+
+6. **Verify without affine conversion.** Verify converted the sum
+   u1·G + u2·Q to affine coordinates, which costs one field inversion, only
+   to compare its x with r. Since x = X/Z² < p < 2n, x mod n == r means
+   x == r, or x == r + n when r + n < p. Verify now compares X with r·Z²
+   (and with (r + n)·Z² in the rare second case) instead. Wycheproof's
+   "k*G has a large x-coordinate" vector covers the second case: the test
+   fails if it is removed.
 
 ## Tried and not adopted
 

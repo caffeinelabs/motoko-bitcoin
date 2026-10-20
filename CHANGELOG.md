@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     multiplication (verify −25.1%, verify heap −26.6%).
   - `Field.inverse()` uses an iterative extended Euclidean algorithm with one
     division per step (one inversion −22%, verify −1.6%).
+  - ECDSA verification compares the result in Jacobian coordinates and no
+    longer converts it to affine coordinates (verify −2.7%).
 
 ## [0.2.3] - 2026-10-19
 
