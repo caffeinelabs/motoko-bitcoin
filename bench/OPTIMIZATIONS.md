@@ -52,3 +52,13 @@ heap (its own benchmark, measured without `wasm-opt`).
    cheaper mixed one. Building the tables costs one doubling and seven
    additions per multiplication, which is why short scalars (the `mul`
    column) get slower. Widths 4 and 6 measured 118.6M and 119.0M for verify.
+
+## Tried and not adopted
+
+- **Affine wNAF tables** (after step 3). Converting each table to affine
+  coordinates with one batched inversion (Montgomery's trick) lets the main
+  loop use mixed additions again. But one inversion via the extended
+  Euclidean algorithm costs about 3.7M instructions, as much as the mixed
+  additions save: verify measured 117_561_742 (+0.6%), BIP32 depth 5
+  412_244_576 (−0.3%), and `mul` with a short scalar got 38% slower. Worth
+  retrying with a faster inversion.
