@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     2⁶⁴, against precomputed tables for `2^64 * G` (`mulBase` −29.7%, BIP32
     derivation −24.7%). The generator tables now use width 6, so the Wasm
     size stays the same.
+  - `Numbers.toWnaf()` recodes on 64-bit machine words instead of bignums,
+    42 times faster (verify −11.4%, BIP32 derivation −7.7%).
 
 ## [0.2.3] - 2026-10-19
 

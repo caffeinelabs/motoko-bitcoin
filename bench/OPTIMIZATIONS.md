@@ -21,19 +21,21 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Split G's scalar at 2⁶⁴ (width 6)      |   68_097_977 |  −0.8% |    5.65 MiB |  +0.5% |   184_148_568 | −24.7% |     16_238_213 |  +6.1% |
 | Keep the field helpers private         |   68_401_510 |  +0.4% |    5.65 MiB |     0% |   185_044_210 |  +0.5% |     16_306_333 |  +0.4% |
 | Retire `ec_arith` benchmark            |   68_401_510 |     0% |    5.65 MiB |     0% |   185_044_210 |     0% |     16_312_000 |     0% |
+| wNAF recoding on `Nat64` words         |   60_580_051 | −11.4% |    5.24 MiB |  −7.3% |   170_790_134 |  −7.7% |     15_687_416 |  −3.8% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
 above):
 
-| Step                              | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |     Δ |   `mulAdd` |     Δ |
-| :-------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | ----: | ---------: | ----: |
-| Precomputed tables for G          | 24_419_901 |        | 56_959_886 |        | 59_227_618 |       | 73_905_529 |       |
-| Square root by addition chain     |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 | −0.1% | 73_853_875 | −0.1% |
-| G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 | −0.3% |
-| Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 | −7.0% | 69_493_523 | −5.6% |
-| Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 | +0.7% | 69_657_567 | +0.2% |
-| Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 | +0.4% | 69_958_715 | +0.4% |
+| Step                              | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |     Δ |   `mulAdd` |      Δ |
+| :-------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | ----: | ---------: | -----: |
+| Precomputed tables for G          | 24_419_901 |        | 56_959_886 |        | 59_227_618 |       | 73_905_529 |        |
+| Square root by addition chain     |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 | −0.1% | 73_853_875 |  −0.1% |
+| G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 |  −0.3% |
+| Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 | −7.0% | 69_493_523 |  −5.6% |
+| Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 | +0.7% | 69_657_567 |  +0.2% |
+| Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 | +0.4% | 69_958_715 |  +0.4% |
+| wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 | −8.8% | 62_263_255 | −11.0% |
 
 Columns:
 
@@ -230,6 +232,21 @@ heap (its own benchmark, measured without `wasm-opt`).
     now has a `57-bit k` column with the same scalar next to the `256-bit k`
     column; its `mulBase` cell matches the old `k large` cell (16_312_000 vs
     16_311_884). No code change.
+
+14. **wNAF recoding on `Nat64` words.** Found by comparing with
+    [motoko_ecdsa#4](https://github.com/research-ag/motoko_ecdsa/pull/4),
+    which verifies in 66.1M instructions despite still converting the result
+    to affine and validating the public key on every call. Its primitives
+    cost about the same as ours, except the recoding: `Numbers.toWnaf` did a
+    bignum `%` and `/` for every digit position, about 2.56M instructions
+    for a 128-bit scalar, as much as 13 doublings. Verify recodes six
+    scalars (Q's two GLV halves and G's four pieces). motoko_ecdsa skips a
+    whole window after each non-zero digit and took 1.25M. Now `toWnaf`
+    splits |n| into 64-bit words once and runs libsecp256k1's recoding on
+    `Nat64` values: 61.5k instructions for a 128-bit scalar, 42 times
+    faster. The output is unchanged (the width-w NAF of a number is
+    unique; checked against the old algorithm on more than 4,000 inputs and
+    widths). Widths above 32 keep the bignum algorithm.
 
 ## Tried and not adopted
 
