@@ -23,6 +23,7 @@ import VarArray "mo:core/VarArray";
 
 import Affine "Affine";
 import Curves "Curves";
+import Field "Field";
 import BaseFp "Fp";
 import Numbers "Numbers";
 import Secp256k1Generator "Secp256k1Generator";
@@ -37,23 +38,12 @@ module {
   // Window width of the wNAF digits in GLV scalar multiplication.
   let GLV_WINDOW : Nat = 5;
 
-  let SECP256K1_P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
-  // 2^256 - p = 2^32 + 977
-  let SECP256K1_C : Nat = 0x1000003d1;
+  let SECP256K1_P : Nat = Field.secp256k1P;
 
-  // Reduces a product of two residues (so t < p^2) modulo `p`. For the
-  // secp256k1 prime it folds the bits above 2^256 back in using
-  // 2^256 = 2^32 + 977 (mod p) instead of a bignum division: two folds bring
-  // t < 2^512 below 2^256 + 2^67 < 2p.
+  // Reduces a product of two residues (so t < p^2) modulo `p`, with a fast
+  // path for the secp256k1 prime.
   func reduce(t : Nat, p : Nat) : Nat {
-    if (p != SECP256K1_P) return t % p;
-    let tHi = Nat.bitshiftRight(t, 256);
-    let tLo : Nat = t - Nat.bitshiftLeft(tHi, 256);
-    let u = tLo + tHi * SECP256K1_C;
-    let uHi = Nat.bitshiftRight(u, 256);
-    let uLo : Nat = u - Nat.bitshiftLeft(uHi, 256);
-    let v = uLo + uHi * SECP256K1_C;
-    if (v >= p) v - p else v;
+    if (p != SECP256K1_P) t % p else Field.reduceSecp256k1(t);
   };
 
   func fmul(a : Nat, b : Nat, p : Nat) : Nat = reduce(a * b, p);

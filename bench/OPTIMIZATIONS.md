@@ -5,24 +5,26 @@ step. Each step is a single commit, measured with `mops bench --locked` on
 the toolchain pinned in `mops.toml` (moc 2.0.0, pocket-ic 15.0.0, wasm-opt
 with `[optimize]`). The "Δ" columns compare a step with the row above it.
 
-| Step                                   | ECDSA verify |      Δ | Verify heap |      Δ | BIP32 depth 5 |     Δ | `mul`, k < 2⁵⁷ |      Δ |
-| :------------------------------------- | -----------: | -----: | ----------: | -----: | ------------: | ----: | -------------: | -----: |
-| 0.2.3 (GLV, `% p`)                     |  158_720_308 |        |    6.81 MiB |        |   521_699_275 |       |     29_921_334 |        |
-| Reduction specialized to secp256k1's p |  138_177_588 | −12.9% |   11.78 MiB | +73.0% |   469_896_817 | −9.9% |     26_035_801 | −13.0% |
-| Field arithmetic on `Nat` residues     |  127_092_370 |  −8.0% |   10.67 MiB |  −9.4% |   442_104_728 | −5.9% |     23_711_013 |  −8.9% |
-| Width-5 wNAF, Jacobian tables          |  116_817_125 |  −8.1% |    9.78 MiB |  −8.3% |   413_335_328 | −6.5% |     24_593_089 |  +3.7% |
-| Combined multiplication in verify      |   87_478_767 | −25.1% |    7.18 MiB | −26.6% |   412_601_208 | −0.2% |     24_599_742 |     0% |
-| Iterative field inversion              |   86_057_048 |  −1.6% |    7.11 MiB |  −1.0% |   409_007_176 | −0.9% |     23_890_156 |  −2.9% |
-| Verify without affine conversion       |   83_714_883 |  −2.7% |    6.93 MiB |  −2.5% |   409_007_176 |    0% |     23_890_156 |     0% |
-| Precomputed tables for G (width 7)     |   72_794_211 | −13.0% |    5.98 MiB | −13.7% |   409_009_816 |    0% |     23_891_642 |     0% |
+| Step                                   | ECDSA verify |      Δ | Verify heap |      Δ | BIP32 depth 5 |      Δ | `mul`, k < 2⁵⁷ |      Δ |
+| :------------------------------------- | -----------: | -----: | ----------: | -----: | ------------: | -----: | -------------: | -----: |
+| 0.2.3 (GLV, `% p`)                     |  158_720_308 |        |    6.81 MiB |        |   521_699_275 |        |     29_921_334 |        |
+| Reduction specialized to secp256k1's p |  138_177_588 | −12.9% |   11.78 MiB | +73.0% |   469_896_817 |  −9.9% |     26_035_801 | −13.0% |
+| Field arithmetic on `Nat` residues     |  127_092_370 |  −8.0% |   10.67 MiB |  −9.4% |   442_104_728 |  −5.9% |     23_711_013 |  −8.9% |
+| Width-5 wNAF, Jacobian tables          |  116_817_125 |  −8.1% |    9.78 MiB |  −8.3% |   413_335_328 |  −6.5% |     24_593_089 |  +3.7% |
+| Combined multiplication in verify      |   87_478_767 | −25.1% |    7.18 MiB | −26.6% |   412_601_208 |  −0.2% |     24_599_742 |     0% |
+| Iterative field inversion              |   86_057_048 |  −1.6% |    7.11 MiB |  −1.0% |   409_007_176 |  −0.9% |     23_890_156 |  −2.9% |
+| Verify without affine conversion       |   83_714_883 |  −2.7% |    6.93 MiB |  −2.5% |   409_007_176 |     0% |     23_890_156 |     0% |
+| Precomputed tables for G (width 7)     |   72_794_211 | −13.0% |    5.98 MiB | −13.7% |   409_009_816 |     0% |     23_891_642 |     0% |
+| Square root by addition chain          |   72_813_632 |     0% |    5.99 MiB |     0% |   320_855_562 | −21.6% |     23_891_642 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
 above):
 
-| Step                     | Decompress |   Δ |  `mulBase` |   Δ |      `mul` |   Δ |   `mulAdd` |   Δ |
-| :----------------------- | ---------: | --: | ---------: | --: | ---------: | --: | ---------: | --: |
-| Precomputed tables for G | 24_419_901 |     | 56_959_886 |     | 59_227_618 |     | 73_905_529 |     |
+| Step                          | Decompress |      Δ |  `mulBase` |   Δ |      `mul` |     Δ |   `mulAdd` |     Δ |
+| :---------------------------- | ---------: | -----: | ---------: | --: | ---------: | ----: | ---------: | ----: |
+| Precomputed tables for G      | 24_419_901 |        | 56_959_886 |     | 59_227_618 |       | 73_905_529 |       |
+| Square root by addition chain |  6_772_845 | −72.3% | 56_945_858 |  0% | 59_170_259 | −0.1% | 73_853_875 | −0.1% |
 
 Columns:
 
@@ -133,6 +135,20 @@ heap (its own benchmark, measured without `wasm-opt`).
 
    Width 7 is the chosen trade-off. To change it, regenerate the module with
    another width; nothing else depends on it.
+
+8. **Square root by addition chain.** Decompressing a public key computes
+   a square root, a^((p+1)/4), through `Fp.sqrt()` and `Field.pow`, which
+   still used the generic `% p` for each of about 500 multiplications
+   (253 squarings and 246 multiplications by square-and-multiply). Now
+   `Field.mul` uses the secp256k1 fold when the modulus is p and the
+   product is below 2⁵¹² (so its contract, `(a * b) % n` for any inputs,
+   is unchanged), and `Fp.sqrt()` uses an addition chain of 253 squarings
+   and 13 multiplications (the one in libsecp256k1). The fold moved from
+   `Jacobi` to `Field.reduceSecp256k1`, shared by both. Decompression
+   drops by 72%. Verifying against a compressed public key, which goes
+   through the same decompression in `Publickey.decode`, saves the same
+   17.6M; `bench/ecdsa_verify.bench.mo` uses a parsed key and doesn't show
+   it.
 
 ## Tried and not adopted
 

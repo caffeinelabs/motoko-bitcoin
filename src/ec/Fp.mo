@@ -86,7 +86,11 @@ module {
     ///
     /// Never traps.
     public func sqrt() : Fp {
-      Fp(Field.pow(value, (n + 1) / 4, n), n);
+      if (n == Field.secp256k1P) {
+        Fp(Field.sqrtSecp256k1(value), n);
+      } else {
+        Fp(Field.pow(value, (n + 1) / 4, n), n);
+      };
     };
   };
 };

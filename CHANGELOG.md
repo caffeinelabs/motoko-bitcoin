@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   separate multiplications.
 - Add `Secp256k1Generator`, precomputed multiples of the secp256k1 generator
   used by `Jacobi.mulAdd()`.
+- Add `Field.secp256k1P`, `Field.reduceSecp256k1()` and
+  `Field.sqrtSecp256k1()`.
 
 ### Changed
 
@@ -33,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     longer converts it to affine coordinates (verify −2.7%).
   - Precomputed tables of the secp256k1 generator for the `G` half of
     verification (verify −13.0%, verify heap −13.7%; Wasm +21 KB).
+  - `Field.mul()` reduces modulo the secp256k1 prime without a bignum
+    division, and `Fp.sqrt()` uses an addition chain on secp256k1 (public key
+    decompression −72%, BIP32 derivation −21.6%).
 
 ## [0.2.3] - 2026-10-19
 
