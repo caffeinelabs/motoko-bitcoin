@@ -19,6 +19,7 @@ SHIFT = 64
 
 
 def add(p1, p2):
+    """Adds two affine points (not the point at infinity) on secp256k1."""
     (x1, y1), (x2, y2) = p1, p2
     if p1 == p2:
         m = 3 * x1 * x1 * pow(2 * y1, -1, P) % P
@@ -29,6 +30,7 @@ def add(p1, p2):
 
 
 def mul(k, point):
+    """Multiplies an affine point by k > 0 with double-and-add."""
     acc = None
     for bit in bin(k)[2:]:
         acc = add(acc, acc) if acc else None
@@ -38,11 +40,13 @@ def mul(k, point):
 
 
 def main():
+    """Prints the generated Motoko module for the width in sys.argv[1]."""
     assert P == 2**256 - 2**32 - 977
     width = int(sys.argv[1])
     g = (GX, GY)
 
     def odd_multiples(base):
+        """Returns base, 3 * base, ..., (2^(width - 1) - 1) * base, checked."""
         two = add(base, base)
         out = [base]
         for _ in range(2 ** (width - 2) - 1):
@@ -54,6 +58,7 @@ def main():
         return out
 
     def phi_of(points):
+        """Applies the endomorphism phi(x, y) = (beta * x, y) to each point."""
         return [(BETA * x % P, y) for (x, y) in points]
 
     multiples = odd_multiples(g)
@@ -65,6 +70,7 @@ def main():
     assert phi_shifted[0] == mul(LAMBDA * 2**SHIFT, g)
 
     def table(points):
+        """Formats points as a Motoko array literal of (x, y, 1) triples."""
         rows = "".join(f"    (0x{x:064x}, 0x{y:064x}, 1),\n" for x, y in points)
         return "[\n" + rows + "  ]"
 

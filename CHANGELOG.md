@@ -31,7 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `Field.inverse()` uses an iterative extended Euclidean algorithm with one
     division per step (one inversion −22%, verify −1.6%).
   - ECDSA verification compares the result in Jacobian coordinates and no
-    longer converts it to affine coordinates (verify −2.7%).
+    longer converts it to affine coordinates, on curves whose order n and
+    field prime p satisfy n < p < 2n, such as secp256k1 (verify −2.7%).
+    Other curves keep the affine check.
   - Precomputed tables of the secp256k1 generator for the `G` half of
     verification (verify −13.0%, verify heap −13.7%; Wasm +21 KB).
   - `Field.mul()` reduces modulo the secp256k1 prime without a bignum

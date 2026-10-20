@@ -69,8 +69,15 @@ module {
     let #point(x2, _, z2, _) = sum else return false;
 
     // The signature is valid iff x mod n == r for the affine x = X / Z^2 of
-    // the sum. Because x < p < 2n, that means x == r, or x == r + n when
-    // r + n < p. Comparing X with r * Z^2 avoids inverting Z.
+    // the sum. Only if n < p < 2n (as on secp256k1) does that mean x == r, or
+    // x == r + n when r + n < p, so that X can be compared with r * Z^2
+    // without inverting Z. Other curves convert to affine.
+    if (not (curve.r < curve.p and curve.p < 2 * curve.r)) {
+      return switch (Jacobi.toAffine(sum)) {
+        case (#point(xAffine, _, _)) r.isEqual(Fp.Fp(xAffine.value, curve.r));
+        case (#infinity(_)) false;
+      };
+    };
     let zz = z2.sqr();
     if (x2.isEqual(curve.Fp(signature.r).mul(zz))) {
       return true;

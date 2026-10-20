@@ -262,6 +262,19 @@ heap (its own benchmark, measured without `wasm-opt`).
     instructions. When H = 0 and r ≠ 0 (P2 = −P1) the formulas now return
     the point at infinity directly.
 
+16. **Guard the projective verify check.** Found by CodeRabbit's review of
+    research-ag/motoko-bitcoin#16. Step 6's comparison of X with r·Z² and
+    (r + n)·Z² is equivalent to x mod n == r only if n < p < 2n, which
+    secp256k1 satisfies. `Curves.Curve` is a public type, and on other
+    curves the check was wrong in both directions: with n > p it accepted
+    signatures with r ≥ p (because `curve.Fp(r)` reduces r mod p), and with
+    p > 2n it rejected valid signatures whose x is r + 2n or more. Verify
+    now uses the projective check only if n < p < 2n and otherwise converts
+    to affine as before. A test checks every (r, s) on two toy curves
+    (p = 5, n = 7 and p = 13, n = 5) against results computed directly; it
+    fails with the guard removed. Cost on secp256k1: 3_439 instructions per
+    verify (+0.006%).
+
 ## Tried and not adopted
 
 - **Affine wNAF tables** (after step 3). Converting each table to affine
