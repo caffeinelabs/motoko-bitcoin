@@ -12,12 +12,14 @@ import Ecdsa "../../src/ecdsa/Ecdsa";
 import Hex "../Hex";
 import PublicKey "../../src/ecdsa/Publickey";
 import TestUtils "../TestUtils";
+import Secp256r1 "../ec/Secp256r1";
 import WycheproofEcdsaTestVectors "wycheproofEcdsaSecp256k1TestVectors";
+import WycheproofEcdsaSecp256r1TestVectors "wycheproofEcdsaSecp256r1TestVectors";
 
 type WycheproofEcdsaTestCase = WycheproofEcdsaTestVectors.WycheproofEcdsaTestCase;
 let runTest = TestUtils.runTestWithDefaults;
 
-func testWycheproofEcdsa(testCase : WycheproofEcdsaTestCase) {
+func testWycheproofEcdsa(curve : Curves.Curve, testCase : WycheproofEcdsaTestCase) {
   let (key, sig, msg) = switch (
     Hex.decode(testCase.key),
     Hex.decode(testCase.sig),
@@ -31,12 +33,16 @@ func testWycheproofEcdsa(testCase : WycheproofEcdsaTestCase) {
   };
 
   switch (
-    PublicKey.decode(#sec1(key, Curves.secp256k1)),
+    PublicKey.decode(#sec1(key, curve)),
     Der.decodeSignature(Blob.fromArray(sig)),
   ) {
     case (#ok(publicKey), #ok(signature)) {
       let actual = Ecdsa.verify(signature, publicKey, msg);
-      let expected = testCase.result == "valid" or testCase.result == "acceptable";
+      // The decoder accepts integers without their leading zero byte, which
+      // Wycheproof flags as a legacy encoding ("MissingZero"): "acceptable"
+      // in the older secp256k1 file, "invalid" in the v1 files.
+      let legacy = testCase.flags.find(func(f : Text) : Bool = f == "MissingZero") != null;
+      let expected = testCase.result == "valid" or testCase.result == "acceptable" or legacy;
       assert (expected == actual);
     };
     case _ {
@@ -47,8 +53,14 @@ func testWycheproofEcdsa(testCase : WycheproofEcdsaTestCase) {
 
 runTest({
   title = "Wycheproof ECDSA";
-  fn = testWycheproofEcdsa;
+  fn = func(testCase : WycheproofEcdsaTestCase) = testWycheproofEcdsa(Curves.secp256k1, testCase);
   vectors = WycheproofEcdsaTestVectors.testVectors;
+});
+
+runTest({
+  title = "Wycheproof ECDSA secp256r1";
+  fn = func(testCase : WycheproofEcdsaTestCase) = testWycheproofEcdsa(Secp256r1.curve, testCase);
+  vectors = WycheproofEcdsaSecp256r1TestVectors.testVectors;
 });
 
 // Curves outside n < p < 2n, where verify can't use the projective check.

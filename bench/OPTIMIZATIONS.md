@@ -275,6 +275,22 @@ heap (its own benchmark, measured without `wasm-opt`).
     fails with the guard removed. Cost on secp256k1: 3_439 instructions per
     verify (+0.006%).
 
+17. **secp256r1 in the tests and benchmarks.** secp256r1 (NIST P-256) is
+    defined in `test/ec/Secp256r1.mo`, for tests and benchmarks only; the
+    package doesn't export it. It has no GLV endomorphism and a = −3, so it
+    exercises the generic code paths that secp256k1 never takes. The tests
+    run all 484 Wycheproof secp256r1 vectors (converted by
+    `scripts/wycheproof_ecdsa_to_motoko.py` from the C2SP/wycheproof v1
+    files); vectors flagged `MissingZero` (a legacy DER encoding that the
+    decoder accepts) count as acceptable, as in the older secp256k1 file.
+    `bench/ecdsa_verify.bench.mo` and `bench/ec_ops.bench.mo` have a
+    secp256r1 column. Baseline on the generic paths: verify 260_500_021
+    instructions (11.31 MiB), `mulBase` 130_937_616, `mul` 133_063_220,
+    `mulAdd` 261_322_479, decompression 15_896_705. For comparison,
+    motoko_ecdsa#4 verifies on P-256 in 122.8M, with Montgomery
+    multiplication, wNAF and Shamir's trick for that curve. No code change;
+    the secp256k1 numbers are unchanged.
+
 ## Tried and not adopted
 
 - **Affine wNAF tables** (after step 3). Converting each table to affine
