@@ -20,6 +20,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Doubling formula for a = 0             |   68_677_192 |  −5.7% |    5.62 MiB |  −6.2% |   244_672_531 |  −7.7% |     15_302_557 |  −9.7% |
 | Split G's scalar at 2⁶⁴ (width 6)      |   68_097_977 |  −0.8% |    5.65 MiB |  +0.5% |   184_148_568 | −24.7% |     16_238_213 |  +6.1% |
 | Keep the field helpers private         |   68_401_510 |  +0.4% |    5.65 MiB |     0% |   185_044_210 |  +0.5% |     16_306_333 |  +0.4% |
+| Retire `ec_arith` benchmark            |   68_401_510 |     0% |    5.65 MiB |     0% |   185_044_210 |     0% |     16_312_000 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -42,9 +43,12 @@ Columns:
   not retained memory).
 - **BIP32 depth 5**: instructions for deriving a depth-5 path from an array
   path in `bench/bip32.bench.mo`.
-- **`mul`, k < 2⁵⁷**: instructions for `mulPoint`, `k large`, in
-  `bench/ec_arith.bench.mo`. Its scalars are below 2⁵⁷, so it doesn't show
-  gains that only apply to full-size scalars, such as GLV.
+- **`mul`, k < 2⁵⁷**: instructions for multiplying G by the 57-bit scalar
+  123456789123456789, including the conversion to affine. Up to step 12
+  this is `mulPoint`, `k large`, in the former `bench/ec_arith.bench.mo`
+  (which multiplied G); from step 13 on it is `mulBase`, `57-bit k`, in
+  `bench/ec_ops.bench.mo`, the same operation. Scalars this short don't
+  show gains that only apply to full-size scalars, such as GLV.
 - **Decompress**: `Jacobi.fromBytes` on a compressed public key, which
   computes a square root. **`mulBase`**, **`mul`**, **`mulAdd`**: 256-bit
   scalars, including the final conversion to affine coordinates.
@@ -218,6 +222,14 @@ heap (its own benchmark, measured without `wasm-opt`).
     call per multiplication: about +0.4% everywhere. A private copy of the
     fold in `Jacobi` would avoid that, at the price of a second copy of the
     same code.
+
+13. **Retire the `ec_arith` benchmark.** Its scalars were all below 2⁵⁷,
+    so it misrepresented every full-size change (it showed +6.1% for the 2⁶⁴
+    split, which made `mulBase` 30% faster), and its `mulPoint` row
+    multiplied G, so it measured `mulBase` twice. `bench/ec_ops.bench.mo`
+    now has a `57-bit k` column with the same scalar next to the `256-bit k`
+    column; its `mulBase` cell matches the old `k large` cell (16_312_000 vs
+    16_311_884). No code change.
 
 ## Tried and not adopted
 
