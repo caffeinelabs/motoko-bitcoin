@@ -91,11 +91,27 @@ heap (its own benchmark, measured without `wasm-opt`).
    them yet.
 
    Large `Nat` literals aren't static data: moc emits code that builds each
-   bignum once at program start (in the Wasm start function, before
-   `canister_init`), so they cost Wasm size and a one-time init cost.
+   bignum, about 160–260 bytes of Wasm per `Nat` against 32 bytes of value.
+   That code runs in the Wasm start function, which the IC executes when it
+   instantiates the module: at install, reinstall and every upgrade (with
+   enhanced orthogonal persistence the tables are rebuilt after each
+   upgrade). It is charged to that operation, not to later messages, and not
+   to the first use of the curve. Evidence:
+
+   - The canister Wasm has a start section.
+   - `Prim.performanceCounter(0)` read in the actor initializer showed the
+     same 5_198 instructions with no table, 16 points and 64 points, so the
+     work is not in the counted part of `canister_init`.
+   - Inside one message, the first pass over the table cost exactly as much
+     as the second (674_821 instructions at width 5), so construction is not
+     lazy.
+   - A WASI build, which runs everything from `_start`, needed more wasmtime
+     fuel as the table grew (the "Init" column below). Fuel is roughly one
+     unit per Wasm instruction, close to but not identical to the IC's count;
+     the init cost wasn't measured on a replica.
+
    Measured on a canister that calls `Ecdsa.verify` (242_950 bytes after
-   `wasm-opt -O3` without the tables), and with wasmtime fuel for the init
-   cost:
+   `wasm-opt -O3` without the tables):
 
    | Width | Points |        Wasm (-O3) | Init (once) | ECDSA verify | Δ vs no table |
    | ----: | -----: | ----------------: | ----------: | -----------: | ------------: |
