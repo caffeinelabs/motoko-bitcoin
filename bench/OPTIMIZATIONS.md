@@ -87,5 +87,11 @@ heap (its own benchmark, measured without `wasm-opt`).
   loop use mixed additions again. But one inversion via the extended
   Euclidean algorithm costs about 3.7M instructions, as much as the mixed
   additions save: verify measured 117_561_742 (+0.6%), BIP32 depth 5
-  412_244_576 (−0.3%), and `mul` with a short scalar got 38% slower. Worth
-  retrying with a faster inversion.
+  412_244_576 (−0.3%), and `mul` with a short scalar got 38% slower.
+
+  Retried after step 6, with the faster inversion: verify 83_714_883 →
+  82_803_498 (−1.1%), heap 6.93 → 6.81 MiB, BIP32 depth 5 409_007_176 →
+  404_596_448 (−1.1%), but `mul` with scalars below 2⁵⁷ got 9.5–34% slower.
+  Dropped: the gain is too small for the extra code. Only width 5 was
+  measured. Affine tables come for free in a precomputed table for G,
+  because its entries are constants.
