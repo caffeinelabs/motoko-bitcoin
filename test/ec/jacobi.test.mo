@@ -267,4 +267,21 @@ do {
     assert (px == glv.beta * x % curve.p and py == y);
     expected := Jacobi.add(expected, twoG);
   };
+
+  // H = 2^shift * G by repeated doubling, and phi(H) = lambda * H.
+  var h = g;
+  for (_ in Nat.range(0, Secp256k1Generator.shift)) h := Jacobi.double(h);
+  let twoH = Jacobi.double(h);
+  let (phiHX, phiHY, _) = Secp256k1Generator.phiShiftedMultiples[0];
+  assert (Jacobi.isEqual(Jacobi.fromNat(phiHX, phiHY, 1, curve), doubleAndAdd(g, glv.lambda * 2 ** Secp256k1Generator.shift % curve.r)));
+
+  var expectedH = h;
+  for (i in Nat.range(0, Secp256k1Generator.shiftedMultiples.size())) {
+    let (x, y, z) = Secp256k1Generator.shiftedMultiples[i];
+    let (px, py, pz) = Secp256k1Generator.phiShiftedMultiples[i];
+    assert (z == 1 and pz == 1);
+    assert (Jacobi.isEqual(Jacobi.fromNat(x, y, 1, curve), expectedH));
+    assert (px == glv.beta * x % curve.p and py == y);
+    expectedH := Jacobi.add(expectedH, twoH);
+  };
 };

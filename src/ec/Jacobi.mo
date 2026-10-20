@@ -315,6 +315,33 @@ module {
     x == Curves.secp256k1.gx and y == Curves.secp256k1.gy and Curves.isEqual(curve, Curves.secp256k1);
   };
 
+  // The four terms of `scalar * G` for the secp256k1 generator G: each GLV
+  // half k is split once more into `kLow + 2^shift * kHigh`, against the
+  // precomputed tables of G, H = 2^shift * G and their images under phi. The
+  // pieces have about half the digits, so the loop needs about half the
+  // doublings.
+  func generatorTerms(scalar : Nat, glv : Curves.Glv, curve : Curves.Curve) : [WnafTerm] {
+    let ?(k1, k2) = glvSplit(scalar, glv, curve) else return [];
+    let window = Secp256k1Generator.window;
+    let shift = Secp256k1Generator.shift.toNat32();
+    func pieces(k : Int, low : [Coords], high : [Coords]) : [WnafTerm] {
+      let abs = Int.abs(k);
+      let kHigh = Nat.bitshiftRight(abs, shift);
+      let kLow : Nat = abs - Nat.bitshiftLeft(kHigh, shift);
+      [
+        { digits = Numbers.toWnaf(kLow, window); table = low; negative = k < 0 },
+        {
+          digits = Numbers.toWnaf(kHigh, window);
+          table = high;
+          negative = k < 0;
+        },
+      ];
+    };
+    pieces(k1, Secp256k1Generator.multiples, Secp256k1Generator.shiftedMultiples).concat(
+      pieces(k2, Secp256k1Generator.phiMultiples, Secp256k1Generator.phiShiftedMultiples)
+    );
+  };
+
   // The GLV terms of `scalar * P` for the affine point P = (x, y), using the
   // precomputed tables if P is the secp256k1 generator.
   func pointTerms(
@@ -325,14 +352,7 @@ module {
     curve : Curves.Curve,
   ) : [WnafTerm] {
     if (isSecp256k1Generator(x, y, curve)) {
-      splitTerms(
-        scalar,
-        Secp256k1Generator.multiples,
-        Secp256k1Generator.phiMultiples,
-        Secp256k1Generator.window,
-        glv,
-        curve,
-      );
+      generatorTerms(scalar, glv, curve);
     } else {
       glvTerms(x, y, scalar, glv, curve);
     };

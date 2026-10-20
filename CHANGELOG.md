@@ -42,6 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     tables (`mulBase` −19.8%, BIP32 derivation −17.4%).
   - A cheaper point doubling for curves with a = 0 (verify −5.7%, BIP32
     derivation −7.7%, `mulBase` −9.2%).
+  - Multiples of the secp256k1 generator split each GLV half once more, at
+    2⁶⁴, against precomputed tables for `2^64 * G` (`mulBase` −29.7%, BIP32
+    derivation −24.7%). The generator tables now use width 6, so the Wasm
+    size stays the same.
 
 ## [0.2.3] - 2026-10-19
 

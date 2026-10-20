@@ -18,17 +18,19 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Square root by addition chain          |   72_813_632 |     0% |    5.99 MiB |     0% |   320_855_562 | −21.6% |     23_865_696 |  −0.1% |
 | G tables in `mul` and `mulBase`        |   72_813_572 |     0% |    5.99 MiB |     0% |   264_985_466 | −17.4% |     16_946_046 | −29.0% |
 | Doubling formula for a = 0             |   68_677_192 |  −5.7% |    5.62 MiB |  −6.2% |   244_672_531 |  −7.7% |     15_302_557 |  −9.7% |
+| Split G's scalar at 2⁶⁴ (width 6)      |   68_097_977 |  −0.8% |    5.65 MiB |  +0.5% |   184_148_568 | −24.7% |     16_238_213 |  +6.1% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
 above):
 
-| Step                            | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |     Δ |   `mulAdd` |     Δ |
-| :------------------------------ | ---------: | -----: | ---------: | -----: | ---------: | ----: | ---------: | ----: |
-| Precomputed tables for G        | 24_419_901 |        | 56_959_886 |        | 59_227_618 |       | 73_905_529 |       |
-| Square root by addition chain   |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 | −0.1% | 73_853_875 | −0.1% |
-| G tables in `mul` and `mulBase` |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 | −0.3% |
-| Doubling formula for a = 0      |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 | −7.0% | 69_493_523 | −5.6% |
+| Step                              | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |     Δ |   `mulAdd` |     Δ |
+| :-------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | ----: | ---------: | ----: |
+| Precomputed tables for G          | 24_419_901 |        | 56_959_886 |        | 59_227_618 |       | 73_905_529 |       |
+| Square root by addition chain     |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 | −0.1% | 73_853_875 | −0.1% |
+| G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 | −0.3% |
+| Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 | −7.0% | 69_493_523 | −5.6% |
+| Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 | +0.7% | 69_657_567 | +0.2% |
 
 Columns:
 
@@ -169,6 +171,39 @@ heap (its own benchmark, measured without `wasm-opt`).
     bignums a multiplication costs about as much as a squaring, so the
     squaring tricks only added work. Every full-size multiplication does
     about 129 doublings, so this shows up everywhere.
+
+11. **Split G's scalar at 2⁶⁴.** A multiple of G needs as many doublings as
+    its longest wNAF term, about 129 for the GLV halves of a 256-bit
+    scalar. Each GLV half k is now split once more into
+    k_low + 2⁶⁴·k_high, against precomputed tables of G, H = 2⁶⁴·G, φ(G)
+    and φ(H). The four pieces have about 65 digits, so `mulBase` needs
+    about 65 doublings instead of 129 and roughly the same number of
+    additions. This speeds up BIP32 public key derivation and Taproot key
+    tweaking, the two callers of `mulBase` in the library. (The library
+    doesn't sign locally: `Bitcoin.mo` signs through an `EcdsaProxy`, for
+    example the IC's threshold ECDSA.) Verify doesn't gain doublings,
+    because Q's two terms still have 129 digits.
+
+    Four tables cost twice the literals of two, so the tables now use
+    width 6: four tables of 16 points each, 64 points in total, the same
+    count as the two width-7 tables of step 7. Measured against step 10
+    (canister calling `Ecdsa.verify` and `mulBase`, Wasm after
+    `wasm-opt -O3`; init cost with wasmtime fuel):
+
+    | Tables      | Points |             Wasm | Init (once) |  `mulBase` |     Verify | BIP32 depth 5 |
+    | :---------- | -----: | ---------------: | ----------: | ---------: | ---------: | ------------: |
+    | 2 × width 7 |     64 |        266_539 B |   about 34k | 41_492_544 | 68_677_192 |   244_672_531 |
+    | 4 × width 6 |     64 |   +684 B (+0.3%) |       +0.4k | 29_150_343 | 68_097_977 |   184_148_568 |
+    | 4 × width 7 |    128 | +21.8 KB (+8.2%) |        +34k | 27_227_307 | 66_811_099 |   177_534_723 |
+
+    Width 6 is better than before on every full-size benchmark at the same
+    size. Scalars below 2⁶⁴ don't benefit (their high pieces are zero) and
+    pay a few more additions for the narrower window: the `mul`, k < 2⁵⁷
+    column, which multiplies G, gets 6.1% slower.
+
+    The init figures here are for the `(x, y, 1)` triples of the committed
+    module and replace the earlier estimate for step 7 (about 20k), which
+    was measured with `(x, y)` pairs.
 
 ## Tried and not adopted
 
