@@ -27,26 +27,37 @@ import Numbers "Numbers";
 module {
   type Fp = BaseFp.Fp;
 
+  // Internal Jacobian coordinates: canonical residues in [0, p). A point
+  // with Y = 0 or Z = 0 is the point at infinity.
+  type Coords = (Nat, Nat, Nat);
+
   let SECP256K1_P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
   // 2^256 - p = 2^32 + 977
   let SECP256K1_C : Nat = 0x1000003d1;
 
-  // Reduces `t` modulo `p` to a representative in (-p, p), like `t % p`.
-  // For the secp256k1 prime it folds the bits above 2^256 back in using
-  // 2^256 = 2^32 + 977 (mod p) instead of a bignum division. Inputs of any
-  // size are accepted (the formulas produce up to 768-bit products), and
-  // small inputs exit after a single shift.
-  func modP(t : Int, p : Nat) : Int {
+  // Reduces a product of two residues (so t < p^2) modulo `p`. For the
+  // secp256k1 prime it folds the bits above 2^256 back in using
+  // 2^256 = 2^32 + 977 (mod p) instead of a bignum division: two folds bring
+  // t < 2^512 below 2^256 + 2^67 < 2p.
+  func reduce(t : Nat, p : Nat) : Nat {
     if (p != SECP256K1_P) return t % p;
-    var v = Int.abs(t);
-    var hi = Nat.bitshiftRight(v, 256);
-    while (hi > 0) {
-      v := v - Nat.bitshiftLeft(hi, 256) + hi * SECP256K1_C;
-      hi := Nat.bitshiftRight(v, 256);
-    };
-    if (v >= p) v -= p;
-    if (t < 0) -v else v;
+    let tHi = Nat.bitshiftRight(t, 256);
+    let tLo : Nat = t - Nat.bitshiftLeft(tHi, 256);
+    let u = tLo + tHi * SECP256K1_C;
+    let uHi = Nat.bitshiftRight(u, 256);
+    let uLo : Nat = u - Nat.bitshiftLeft(uHi, 256);
+    let v = uLo + uHi * SECP256K1_C;
+    if (v >= p) v - p else v;
   };
+
+  func fmul(a : Nat, b : Nat, p : Nat) : Nat = reduce(a * b, p);
+  func fsqr(a : Nat, p : Nat) : Nat = reduce(a * a, p);
+  func fadd(a : Nat, b : Nat, p : Nat) : Nat {
+    let s = a + b;
+    if (s >= p) s - p else s;
+  };
+  func fsub(a : Nat, b : Nat, p : Nat) : Nat = if (a >= b) a - b else a + p - b;
+  func fdbl(a : Nat, p : Nat) : Nat = fadd(a, a, p);
 
   /// Jacobian point representation.
   public type Point = {
@@ -168,12 +179,7 @@ module {
       case (#infinity(curve)) #infinity(curve);
       case (#point(x, y, z, curve)) {
         let (x2, y2, z2) = doDouble(x.value, y.value, z.value, curve.a, curve.p);
-        #point(
-          fpFromInt(x2, curve),
-          fpFromInt(y2, curve),
-          fpFromInt(z2, curve),
-          curve,
-        );
+        #point(curve.Fp(x2), curve.Fp(y2), curve.Fp(z2), curve);
       };
     };
   };
@@ -190,7 +196,7 @@ module {
           case (?glv) return mulGlv(x2, y2, other, glv, curve);
           case null {};
         };
-        var p : (Int, Int, Int) = (0, 0, 1);
+        var p : Coords = (0, 0, 1);
         let naf = Numbers.toNaf(other);
         let y2neg = y2.neg().value;
 
@@ -215,7 +221,7 @@ module {
         if (p.1 == 0 or p.2 == 0) {
           return #infinity(curve);
         };
-        #point(fpFromInt(p.0, curve), fpFromInt(p.1, curve), fpFromInt(p.2, curve), curve);
+        #point(curve.Fp(p.0), curve.Fp(p.1), curve.Fp(p.2), curve);
       };
     };
   };
@@ -265,7 +271,7 @@ module {
     let naf2 = Numbers.toNaf(absK2);
     let len = if (naf1.size() > naf2.size()) naf1.size() else naf2.size();
 
-    var p : (Int, Int, Int) = (0, 0, 1);
+    var p : Coords = (0, 0, 1);
     for (i in Nat.rangeByInclusive(len - 1, 0, -1)) {
       p := doDouble(p.0, p.1, p.2, curve.a, curve.p);
       if (i < naf1.size()) {
@@ -288,7 +294,7 @@ module {
     if (p.1 == 0 or p.2 == 0) {
       return #infinity(curve);
     };
-    #point(fpFromInt(p.0, curve), fpFromInt(p.1, curve), fpFromInt(p.2, curve), curve);
+    #point(curve.Fp(p.0), curve.Fp(p.1), curve.Fp(p.2), curve);
   };
 
   /// Multiplies the curve generator by scalar `other`.
@@ -324,18 +330,13 @@ module {
         if (Y3 == 0 or Z3 == 0) {
           #infinity(curve);
         } else {
-          #point(
-            fpFromInt(X3, curve),
-            fpFromInt(Y3, curve),
-            fpFromInt(Z3, curve),
-            curve,
-          );
+          #point(curve.Fp(X3), curve.Fp(Y3), curve.Fp(Z3), curve);
         };
       };
     };
   };
 
-  func doDouble(X1 : Int, Y1 : Int, Z1 : Int, a : Nat, p : Nat) : (Int, Int, Int) {
+  func doDouble(X1 : Nat, Y1 : Nat, Z1 : Nat, a : Nat, p : Nat) : Coords {
     if (Z1 == 1) {
       return doubleWithZ1(X1, Y1, a, p);
     };
@@ -343,162 +344,171 @@ module {
       return (0, 0, 0);
     };
 
-    let (XX, YY) = (modP(X1 * X1, p), modP(Y1 * Y1, p));
-    let YYYY : Int = modP(YY * YY, p);
-    let ZZ : Int = modP(Z1 * Z1, p);
-    let S : Int = (X1 + YY) |> modP(2 * (_ * _ - XX - YYYY), p);
-    let M : Int = if (a == 0) { modP(3 * XX, p) } else {
-      modP(3 * XX + a * ZZ * ZZ, p);
+    let XX = fsqr(X1, p);
+    let YY = fsqr(Y1, p);
+    let YYYY = fsqr(YY, p);
+    let ZZ = fsqr(Z1, p);
+    // S = 2 * ((X1 + YY)^2 - XX - YYYY)
+    let S = fdbl(fsub(fsub(fsqr(fadd(X1, YY, p), p), XX, p), YYYY, p), p);
+    // M = 3 * XX + a * ZZ^2
+    var M = fadd(fdbl(XX, p), XX, p);
+    if (a != 0) {
+      M := fadd(M, fmul(a, fsqr(ZZ, p), p), p);
     };
-    let T : Int = modP(M * M - 2 * S, p);
+    let T = fsub(fsqr(M, p), fdbl(S, p), p);
+    // Y3 = M * (S - T) - 8 * YYYY
+    let Y3 = fsub(fmul(M, fsub(S, T, p), p), fdbl(fdbl(fdbl(YYYY, p), p), p), p);
+    // Z3 = (Y1 + Z1)^2 - YY - ZZ
+    let Z3 = fsub(fsub(fsqr(fadd(Y1, Z1, p), p), YY, p), ZZ, p);
 
-    let Y3 = modP(M * (S - T) - 8 * YYYY, p);
-    let Z3 = (Y1 + Z1) |> modP(_ * _ - YY - ZZ, p);
-
-    return (T, Y3, Z3);
+    (T, Y3, Z3);
   };
 
-  func doubleWithZ1(X1 : Int, Y1 : Int, a : Nat, p : Nat) : (Int, Int, Int) {
+  func doubleWithZ1(X1 : Nat, Y1 : Nat, a : Nat, p : Nat) : Coords {
     if (Y1 == 0) {
       return (0, 0, 0);
     };
 
-    let (XX, YY) = (modP(X1 * X1, p), modP(Y1 * Y1, p));
-    let YYYY : Int = modP(YY * YY, p);
-    let S : Int = modP(2 * ((X1 + YY) ** 2 - XX - YYYY), p);
-    let M : Int = 3 * XX + a;
-    let T : Int = modP(M * M - 2 * S, p);
-    let Y3 : Int = modP(M * (S - T) - 8 * YYYY, p);
-    let Z3 : Int = modP(2 * Y1, p);
-    return (T, Y3, Z3);
+    let XX = fsqr(X1, p);
+    let YY = fsqr(Y1, p);
+    let YYYY = fsqr(YY, p);
+    let S = fdbl(fsub(fsub(fsqr(fadd(X1, YY, p), p), XX, p), YYYY, p), p);
+    let M = fadd(fadd(fdbl(XX, p), XX, p), a, p);
+    let T = fsub(fsqr(M, p), fdbl(S, p), p);
+    let Y3 = fsub(fmul(M, fsub(S, T, p), p), fdbl(fdbl(fdbl(YYYY, p), p), p), p);
+    let Z3 = fdbl(Y1, p);
+    (T, Y3, Z3);
   };
 
   func addWithEqZ(
-    X1 : Int,
-    Y1 : Int,
-    Z1 : Int,
-    X2 : Int,
-    Y2 : Int,
+    X1 : Nat,
+    Y1 : Nat,
+    Z1 : Nat,
+    X2 : Nat,
+    Y2 : Nat,
     a : Nat,
     p : Nat,
-  ) : (Int, Int, Int) {
-
-    let A : Int = modP((X2 - X1) ** 2, p);
-    let B : Int = modP(X1 * A, p);
-    let C : Int = modP(X2 * A, p);
-    let D : Int = modP((Y2 - Y1) ** 2, p);
+  ) : Coords {
+    let dX = fsub(X2, X1, p);
+    let dY = fsub(Y2, Y1, p);
+    let A = fsqr(dX, p);
+    let B = fmul(X1, A, p);
+    let C = fmul(X2, A, p);
+    let D = fsqr(dY, p);
 
     if (A == 0 and D == 0) {
       return doDouble(X1, Y1, Z1, a, p);
     };
 
-    let X3 : Int = modP(D - B - C, p);
-    let Y3 : Int = modP((Y2 - Y1) * (B - X3) - Y1 * (C - B), p);
-    let Z3 : Int = modP(Z1 * (X2 - X1), p);
+    let X3 = fsub(fsub(D, B, p), C, p);
+    // Y3 = dY * (B - X3) - Y1 * (C - B)
+    let Y3 = fsub(fmul(dY, fsub(B, X3, p), p), fmul(Y1, fsub(C, B, p), p), p);
+    let Z3 = fmul(Z1, dX, p);
 
-    return (X3, Y3, Z3);
+    (X3, Y3, Z3);
   };
 
   func addWithZ1(
-    X1 : Int,
-    Y1 : Int,
-    X2 : Int,
-    Y2 : Int,
+    X1 : Nat,
+    Y1 : Nat,
+    X2 : Nat,
+    Y2 : Nat,
     a : Nat,
     p : Nat,
-  ) : (Int, Int, Int) {
-    let H : Int = X2 - X1;
-    let HH : Int = H * H;
-    let I : Int = modP(4 * HH, p);
-    let J : Int = H * I;
-    let r : Int = 2 * (Y2 - Y1);
+  ) : Coords {
+    let H = fsub(X2, X1, p);
+    let r = fdbl(fsub(Y2, Y1, p), p);
 
     if (H == 0 and r == 0) {
       return doubleWithZ1(X1, Y1, a, p);
     };
 
-    let V : Int = X1 * I;
-    let X3 : Int = modP(r * r - J - 2 * V, p);
-    let Y3 : Int = modP(r * (V - X3) - 2 * Y1 * J, p);
-    let Z3 : Int = modP(2 * H, p);
+    let I = fdbl(fdbl(fsqr(H, p), p), p);
+    let J = fmul(H, I, p);
+    let V = fmul(X1, I, p);
+    let X3 = fsub(fsub(fsqr(r, p), J, p), fdbl(V, p), p);
+    // Y3 = r * (V - X3) - 2 * Y1 * J
+    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fdbl(fmul(Y1, J, p), p), p);
+    let Z3 = fdbl(H, p);
 
-    return (X3, Y3, Z3);
+    (X3, Y3, Z3);
   };
 
   func addWithZ2Eq1(
-    X1 : Int,
-    Y1 : Int,
-    Z1 : Int,
-    X2 : Int,
-    Y2 : Int,
+    X1 : Nat,
+    Y1 : Nat,
+    Z1 : Nat,
+    X2 : Nat,
+    Y2 : Nat,
     a : Nat,
     p : Nat,
-  ) : (Int, Int, Int) {
-
-    let Z1Z1 : Int = modP(Z1 * Z1, p);
-    let (U2, S2) = (modP(X2 * Z1Z1, p), modP(Y2 * Z1 * Z1Z1, p));
-    let H : Int = modP(U2 - X1, p);
-    let HH : Int = modP(H * H, p);
-    let I : Int = modP(4 * HH, p);
-    let J : Int = H * I;
-    let r : Int = modP(2 * (S2 - Y1), p);
+  ) : Coords {
+    let Z1Z1 = fsqr(Z1, p);
+    let U2 = fmul(X2, Z1Z1, p);
+    let S2 = fmul(Y2, fmul(Z1, Z1Z1, p), p);
+    let H = fsub(U2, X1, p);
+    let r = fdbl(fsub(S2, Y1, p), p);
 
     if (r == 0 and H == 0) {
       return doubleWithZ1(X2, Y2, a, p);
     };
 
-    let V : Int = X1 * I;
-    let X3 = modP((r * r) - J - (2 * V), p);
-    let Y3 = modP(r * (V - X3) - 2 * Y1 * J, p);
-    let Z3 = modP((Z1 + H) ** 2 - Z1Z1 - HH, p);
+    let HH = fsqr(H, p);
+    let I = fdbl(fdbl(HH, p), p);
+    let J = fmul(H, I, p);
+    let V = fmul(X1, I, p);
+    let X3 = fsub(fsub(fsqr(r, p), J, p), fdbl(V, p), p);
+    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fdbl(fmul(Y1, J, p), p), p);
+    // Z3 = (Z1 + H)^2 - Z1Z1 - HH
+    let Z3 = fsub(fsub(fsqr(fadd(Z1, H, p), p), Z1Z1, p), HH, p);
 
-    return (X3, Y3, Z3);
+    (X3, Y3, Z3);
   };
 
   func addWithArbitraryZ(
-    X1 : Int,
-    Y1 : Int,
-    Z1 : Int,
-    X2 : Int,
-    Y2 : Int,
-    Z2 : Int,
+    X1 : Nat,
+    Y1 : Nat,
+    Z1 : Nat,
+    X2 : Nat,
+    Y2 : Nat,
+    Z2 : Nat,
     a : Nat,
     p : Nat,
-  ) : (Int, Int, Int) {
-
-    let Z1Z1 : Int = modP(Z1 * Z1, p);
-    let Z2Z2 : Int = modP(Z2 * Z2, p);
-    let U1 : Int = modP(X1 * Z2Z2, p);
-    let U2 : Int = modP(X2 * Z1Z1, p);
-    let S1 : Int = modP(Y1 * Z2 * Z2Z2, p);
-    let S2 : Int = modP(Y2 * Z1 * Z1Z1, p);
-    let H : Int = U2 - U1;
-    let r : Int = modP(2 * (S2 - S1), p);
+  ) : Coords {
+    let Z1Z1 = fsqr(Z1, p);
+    let Z2Z2 = fsqr(Z2, p);
+    let U1 = fmul(X1, Z2Z2, p);
+    let U2 = fmul(X2, Z1Z1, p);
+    let S1 = fmul(Y1, fmul(Z2, Z2Z2, p), p);
+    let S2 = fmul(Y2, fmul(Z1, Z1Z1, p), p);
+    let H = fsub(U2, U1, p);
+    let r = fdbl(fsub(S2, S1, p), p);
 
     if (H == 0 and r == 0) {
       return doDouble(X1, Y1, Z1, a, p);
     };
 
-    let I : Int = modP(4 * H * H, p);
-    let J : Int = modP(H * I, p);
-    let V = U1 * I;
-    let X3 : Int = modP(r * r - J - 2 * V, p);
-    let Y3 : Int = modP(r * (V - X3) - 2 * S1 * J, p);
-    let Z3 : Int = modP(((Z1 + Z2) ** 2 - Z1Z1 - Z2Z2) * H, p);
+    let I = fsqr(fdbl(H, p), p);
+    let J = fmul(H, I, p);
+    let V = fmul(U1, I, p);
+    let X3 = fsub(fsub(fsqr(r, p), J, p), fdbl(V, p), p);
+    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fdbl(fmul(S1, J, p), p), p);
+    // Z3 = ((Z1 + Z2)^2 - Z1Z1 - Z2Z2) * H
+    let Z3 = fmul(fsub(fsub(fsqr(fadd(Z1, Z2, p), p), Z1Z1, p), Z2Z2, p), H, p);
 
-    return (X3, Y3, Z3);
+    (X3, Y3, Z3);
   };
 
   func _add(
-    X1 : Int,
-    Y1 : Int,
-    Z1 : Int,
-    X2 : Int,
-    Y2 : Int,
-    Z2 : Int,
+    X1 : Nat,
+    Y1 : Nat,
+    Z1 : Nat,
+    X2 : Nat,
+    Y2 : Nat,
+    Z2 : Nat,
     a : Nat,
     p : Nat,
-  ) : (Int, Int, Int) {
+  ) : Coords {
 
     if (Y1 == 0 or Z1 == 0) {
       return (X2, Y2, Z2);
@@ -524,15 +534,6 @@ module {
     };
 
     return addWithArbitraryZ(X1, Y1, Z1, X2, Y2, Z2, a, p);
-  };
-
-  func fpFromInt(value : Int, curve : Curves.Curve) : Fp {
-    let mod : Int = value % curve.p;
-    if (mod < 0) {
-      curve.Fp(Int.abs(mod + curve.p));
-    } else {
-      curve.Fp(Int.abs(mod));
-    };
   };
 
   // Normalizes infinity point of the form #point (_, _, 0, _) to #infinity.

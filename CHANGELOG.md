@@ -9,9 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Speed up `Jacobi` point arithmetic on secp256k1 with a modular reduction
-  specialized to the secp256k1 prime: ECDSA verification is 13% cheaper and
-  BIP32 derivation 10% cheaper than in 0.2.3.
+- Speed up `Jacobi` point arithmetic on secp256k1. See
+  [`bench/OPTIMIZATIONS.md`](https://github.com/caffeinelabs/motoko-bitcoin/blob/main/bench/OPTIMIZATIONS.md)
+  for what each step delivered.
+  - A modular reduction specialized to the secp256k1 prime (verify −12.9%).
+  - Field arithmetic on canonical `Nat` residues instead of signed `Int`
+    values (verify −8.0%, verify heap −9.4%).
 
 ## [0.2.3] - 2026-10-19
 
