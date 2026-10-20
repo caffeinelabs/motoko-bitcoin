@@ -38,16 +38,9 @@ module {
   // Window width of the wNAF digits in GLV scalar multiplication.
   let GLV_WINDOW : Nat = 5;
 
-  let SECP256K1_P : Nat = Field.secp256k1P;
-
-  // Reduces a product of two residues (so t < p^2) modulo `p`, with a fast
-  // path for the secp256k1 prime.
-  func reduce(t : Nat, p : Nat) : Nat {
-    if (p != SECP256K1_P) t % p else Field.reduceSecp256k1(t);
-  };
-
-  func fmul(a : Nat, b : Nat, p : Nat) : Nat = reduce(a * b, p);
-  func fsqr(a : Nat, p : Nat) : Nat = reduce(a * a, p);
+  // Field.mul folds instead of dividing for the secp256k1 prime.
+  func fmul(a : Nat, b : Nat, p : Nat) : Nat = Field.mul(a, b, p);
+  func fsqr(a : Nat, p : Nat) : Nat = Field.mul(a, a, p);
   func fadd(a : Nat, b : Nat, p : Nat) : Nat {
     let s = a + b;
     if (s >= p) s - p else s;

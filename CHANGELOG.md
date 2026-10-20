@@ -12,10 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add `Numbers.toWnaf()`, which computes width-`w` NAF digits.
 - Add `Jacobi.mulAdd()`, which computes `a * P1 + b * P2` faster than two
   separate multiplications.
-- Add `Secp256k1Generator`, precomputed multiples of the secp256k1 generator
-  used by `Jacobi.mulAdd()`.
-- Add `Field.secp256k1P`, `Field.reduceSecp256k1()` and
-  `Field.sqrtSecp256k1()`.
+- Add `Secp256k1Generator`, the precomputed multiples of the secp256k1
+  generator used by `Jacobi`. It is internal to the package and not a stable
+  API.
 
 ### Changed
 

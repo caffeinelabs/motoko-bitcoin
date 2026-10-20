@@ -1,6 +1,7 @@
 import Array "mo:core/Array";
 
 import Field "../../src/ec/Field";
+import Fp "../../src/ec/Fp";
 import TestUtils "../TestUtils";
 
 type InverseTestVector = {
@@ -275,9 +276,11 @@ runTest({
   vectors = negationTestVectors;
 });
 
+let secp256k1P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
+
 // Pseudo-random residues mod the secp256k1 prime, plus edge values.
 let secp256k1Inputs : [Nat] = do {
-  let p = Field.secp256k1P;
+  let p = secp256k1P;
   var x = 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798;
   let edges : [Nat] = [0, 1, 2, 3, 4, 7, p - 1, p - 2, 2 ** 255, 2 ** 256 - p, (p - 1) / 2];
   let random = Array.tabulate<Nat>(
@@ -291,21 +294,20 @@ let secp256k1Inputs : [Nat] = do {
 };
 
 runTest({
-  title = "secp256k1 square root chain equals a^((p + 1) / 4)";
+  title = "secp256k1 square root (addition chain) equals a^((p + 1) / 4)";
   fn = func(a : Nat) {
-    let p = Field.secp256k1P;
-    assert (Field.sqrtSecp256k1(a) == Field.pow(a, (p + 1) / 4, p));
+    let p = secp256k1P;
+    assert (Fp.Fp(a, p).sqrt().value == Field.pow(a, (p + 1) / 4, p));
   };
   vectors = secp256k1Inputs;
 });
 
 runTest({
-  title = "secp256k1 fast reduction";
+  title = "Field.mul with the secp256k1 fast reduction equals % p";
   fn = func(a : Nat) {
-    let p = Field.secp256k1P;
+    let p = secp256k1P;
     let b = (a * 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8) % p;
-    assert (Field.reduceSecp256k1(a * b) == (a * b) % p);
-    assert (Field.reduceSecp256k1(a * a) == (a * a) % p);
+    assert (Field.mul(a, a, p) == (a * a) % p);
     assert (Field.mul(a, b, p) == (a * b) % p);
     // Inputs at and above p, and products of 2^512 and more.
     assert (Field.mul(a + p, b + 2 * p, p) == (a * b) % p);

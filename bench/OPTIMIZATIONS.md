@@ -19,6 +19,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | G tables in `mul` and `mulBase`        |   72_813_572 |     0% |    5.99 MiB |     0% |   264_985_466 | −17.4% |     16_946_046 | −29.0% |
 | Doubling formula for a = 0             |   68_677_192 |  −5.7% |    5.62 MiB |  −6.2% |   244_672_531 |  −7.7% |     15_302_557 |  −9.7% |
 | Split G's scalar at 2⁶⁴ (width 6)      |   68_097_977 |  −0.8% |    5.65 MiB |  +0.5% |   184_148_568 | −24.7% |     16_238_213 |  +6.1% |
+| Keep the field helpers private         |   68_401_510 |  +0.4% |    5.65 MiB |     0% |   185_044_210 |  +0.5% |     16_306_333 |  +0.4% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -31,6 +32,7 @@ above):
 | G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 | −0.3% |
 | Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 | −7.0% | 69_493_523 | −5.6% |
 | Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 | +0.7% | 69_657_567 | +0.2% |
+| Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 | +0.4% | 69_958_715 | +0.4% |
 
 Columns:
 
@@ -204,6 +206,18 @@ heap (its own benchmark, measured without `wasm-opt`).
     The init figures here are for the `(x, y, 1)` triples of the committed
     module and replace the earlier estimate for step 7 (about 20k), which
     was measured with `(x, y)` pairs.
+
+12. **Keep the field helpers private.** Steps 8–11 had made
+    `Field.secp256k1P`, `Field.reduceSecp256k1` and `Field.sqrtSecp256k1`
+    public so that `Jacobi` and `Fp` could share them. To keep them out of
+    the published API, the fold is now private to `Field` and used through
+    `Field.mul`, and the square-root chain is private to `Fp`.
+    `Secp256k1Generator` has to stay a public module (Motoko has no
+    package-private modules) and is documented as internal. Going through
+    `Field.mul` costs `Jacobi` an extra `t < 2⁵¹²` check and a cross-module
+    call per multiplication: about +0.4% everywhere. A private copy of the
+    fold in `Jacobi` would avoid that, at the price of a second copy of the
+    same code.
 
 ## Tried and not adopted
 
