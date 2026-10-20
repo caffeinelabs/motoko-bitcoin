@@ -27,6 +27,27 @@ import Numbers "Numbers";
 module {
   type Fp = BaseFp.Fp;
 
+  let SECP256K1_P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
+  // 2^256 - p = 2^32 + 977
+  let SECP256K1_C : Nat = 0x1000003d1;
+
+  // Reduces `t` modulo `p` to a representative in (-p, p), like `t % p`.
+  // For the secp256k1 prime it folds the bits above 2^256 back in using
+  // 2^256 = 2^32 + 977 (mod p) instead of a bignum division. Inputs of any
+  // size are accepted (the formulas produce up to 768-bit products), and
+  // small inputs exit after a single shift.
+  func modP(t : Int, p : Nat) : Int {
+    if (p != SECP256K1_P) return t % p;
+    var v = Int.abs(t);
+    var hi = Nat.bitshiftRight(v, 256);
+    while (hi > 0) {
+      v := v - Nat.bitshiftLeft(hi, 256) + hi * SECP256K1_C;
+      hi := Nat.bitshiftRight(v, 256);
+    };
+    if (v >= p) v -= p;
+    if (t < 0) -v else v;
+  };
+
   /// Jacobian point representation.
   public type Point = {
     #infinity : Curves.Curve;
@@ -322,17 +343,17 @@ module {
       return (0, 0, 0);
     };
 
-    let (XX, YY) = (X1 * X1 % p, Y1 * Y1 % p);
-    let YYYY : Int = YY * YY % p;
-    let ZZ : Int = Z1 * Z1 % p;
-    let S : Int = (X1 + YY) |> 2 * (_ * _ - XX - YYYY) % p;
-    let M : Int = if (a == 0) { 3 * XX % p } else {
-      (3 * XX + a * ZZ * ZZ) % p;
+    let (XX, YY) = (modP(X1 * X1, p), modP(Y1 * Y1, p));
+    let YYYY : Int = modP(YY * YY, p);
+    let ZZ : Int = modP(Z1 * Z1, p);
+    let S : Int = (X1 + YY) |> modP(2 * (_ * _ - XX - YYYY), p);
+    let M : Int = if (a == 0) { modP(3 * XX, p) } else {
+      modP(3 * XX + a * ZZ * ZZ, p);
     };
-    let T : Int = (M * M - 2 * S) % p;
+    let T : Int = modP(M * M - 2 * S, p);
 
-    let Y3 = (M * (S - T) - 8 * YYYY) % p;
-    let Z3 = (Y1 + Z1) |> (_ * _ - YY - ZZ) % p;
+    let Y3 = modP(M * (S - T) - 8 * YYYY, p);
+    let Z3 = (Y1 + Z1) |> modP(_ * _ - YY - ZZ, p);
 
     return (T, Y3, Z3);
   };
@@ -342,13 +363,13 @@ module {
       return (0, 0, 0);
     };
 
-    let (XX, YY) = (X1 * X1 % p, Y1 * Y1 % p);
-    let YYYY : Int = YY * YY % p;
-    let S : Int = 2 * ((X1 + YY) ** 2 - XX - YYYY) % p;
+    let (XX, YY) = (modP(X1 * X1, p), modP(Y1 * Y1, p));
+    let YYYY : Int = modP(YY * YY, p);
+    let S : Int = modP(2 * ((X1 + YY) ** 2 - XX - YYYY), p);
     let M : Int = 3 * XX + a;
-    let T : Int = (M * M - 2 * S) % p;
-    let Y3 : Int = (M * (S - T) - 8 * YYYY) % p;
-    let Z3 : Int = 2 * Y1 % p;
+    let T : Int = modP(M * M - 2 * S, p);
+    let Y3 : Int = modP(M * (S - T) - 8 * YYYY, p);
+    let Z3 : Int = modP(2 * Y1, p);
     return (T, Y3, Z3);
   };
 
@@ -362,18 +383,18 @@ module {
     p : Nat,
   ) : (Int, Int, Int) {
 
-    let A : Int = (X2 - X1) ** 2 % p;
-    let B : Int = X1 * A % p;
-    let C : Int = X2 * A % p;
-    let D : Int = (Y2 - Y1) ** 2 % p;
+    let A : Int = modP((X2 - X1) ** 2, p);
+    let B : Int = modP(X1 * A, p);
+    let C : Int = modP(X2 * A, p);
+    let D : Int = modP((Y2 - Y1) ** 2, p);
 
     if (A == 0 and D == 0) {
       return doDouble(X1, Y1, Z1, a, p);
     };
 
-    let X3 : Int = (D - B - C) % p;
-    let Y3 : Int = ((Y2 - Y1) * (B - X3) - Y1 * (C - B)) % p;
-    let Z3 : Int = Z1 * (X2 - X1) % p;
+    let X3 : Int = modP(D - B - C, p);
+    let Y3 : Int = modP((Y2 - Y1) * (B - X3) - Y1 * (C - B), p);
+    let Z3 : Int = modP(Z1 * (X2 - X1), p);
 
     return (X3, Y3, Z3);
   };
@@ -388,7 +409,7 @@ module {
   ) : (Int, Int, Int) {
     let H : Int = X2 - X1;
     let HH : Int = H * H;
-    let I : Int = 4 * HH % p;
+    let I : Int = modP(4 * HH, p);
     let J : Int = H * I;
     let r : Int = 2 * (Y2 - Y1);
 
@@ -397,9 +418,9 @@ module {
     };
 
     let V : Int = X1 * I;
-    let X3 : Int = (r * r - J - 2 * V) % p;
-    let Y3 : Int = (r * (V - X3) - 2 * Y1 * J) % p;
-    let Z3 : Int = 2 * H % p;
+    let X3 : Int = modP(r * r - J - 2 * V, p);
+    let Y3 : Int = modP(r * (V - X3) - 2 * Y1 * J, p);
+    let Z3 : Int = modP(2 * H, p);
 
     return (X3, Y3, Z3);
   };
@@ -414,22 +435,22 @@ module {
     p : Nat,
   ) : (Int, Int, Int) {
 
-    let Z1Z1 : Int = Z1 * Z1 % p;
-    let (U2, S2) = (X2 * Z1Z1 % p, Y2 * Z1 * Z1Z1 % p);
-    let H : Int = (U2 - X1) % p;
-    let HH : Int = H * H % p;
-    let I : Int = 4 * HH % p;
+    let Z1Z1 : Int = modP(Z1 * Z1, p);
+    let (U2, S2) = (modP(X2 * Z1Z1, p), modP(Y2 * Z1 * Z1Z1, p));
+    let H : Int = modP(U2 - X1, p);
+    let HH : Int = modP(H * H, p);
+    let I : Int = modP(4 * HH, p);
     let J : Int = H * I;
-    let r : Int = 2 * (S2 - Y1) % p;
+    let r : Int = modP(2 * (S2 - Y1), p);
 
     if (r == 0 and H == 0) {
       return doubleWithZ1(X2, Y2, a, p);
     };
 
     let V : Int = X1 * I;
-    let X3 = ((r * r) - J - (2 * V)) % p;
-    let Y3 = (r * (V - X3) - 2 * Y1 * J) % p;
-    let Z3 = ((Z1 + H) ** 2 - Z1Z1 - HH) % p;
+    let X3 = modP((r * r) - J - (2 * V), p);
+    let Y3 = modP(r * (V - X3) - 2 * Y1 * J, p);
+    let Z3 = modP((Z1 + H) ** 2 - Z1Z1 - HH, p);
 
     return (X3, Y3, Z3);
   };
@@ -445,25 +466,25 @@ module {
     p : Nat,
   ) : (Int, Int, Int) {
 
-    let Z1Z1 : Int = Z1 * Z1 % p;
-    let Z2Z2 : Int = Z2 * Z2 % p;
-    let U1 : Int = X1 * Z2Z2 % p;
-    let U2 : Int = X2 * Z1Z1 % p;
-    let S1 : Int = Y1 * Z2 * Z2Z2 % p;
-    let S2 : Int = Y2 * Z1 * Z1Z1 % p;
+    let Z1Z1 : Int = modP(Z1 * Z1, p);
+    let Z2Z2 : Int = modP(Z2 * Z2, p);
+    let U1 : Int = modP(X1 * Z2Z2, p);
+    let U2 : Int = modP(X2 * Z1Z1, p);
+    let S1 : Int = modP(Y1 * Z2 * Z2Z2, p);
+    let S2 : Int = modP(Y2 * Z1 * Z1Z1, p);
     let H : Int = U2 - U1;
-    let r : Int = 2 * (S2 - S1) % p;
+    let r : Int = modP(2 * (S2 - S1), p);
 
     if (H == 0 and r == 0) {
       return doDouble(X1, Y1, Z1, a, p);
     };
 
-    let I : Int = 4 * H * H % p;
-    let J : Int = H * I % p;
+    let I : Int = modP(4 * H * H, p);
+    let J : Int = modP(H * I, p);
     let V = U1 * I;
-    let X3 : Int = (r * r - J - 2 * V) % p;
-    let Y3 : Int = (r * (V - X3) - 2 * S1 * J) % p;
-    let Z3 : Int = ((Z1 + Z2) ** 2 - Z1Z1 - Z2Z2) * H % p;
+    let X3 : Int = modP(r * r - J - 2 * V, p);
+    let Y3 : Int = modP(r * (V - X3) - 2 * S1 * J, p);
+    let Z3 : Int = modP(((Z1 + Z2) ** 2 - Z1Z1 - Z2Z2) * H, p);
 
     return (X3, Y3, Z3);
   };
