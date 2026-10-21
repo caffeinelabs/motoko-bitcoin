@@ -4,11 +4,44 @@
 /// import Fp "mo:bitcoin/ec/Fp";
 /// ```
 
+import Nat "mo:core/Nat";
 import Runtime "mo:core/Runtime";
 
 import Field "Field";
 
 module {
+  // The field prime of secp256k1, 2^256 - 2^32 - 977.
+  let SECP256K1_P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
+
+  // a^((p + 1) / 4) mod p for the secp256k1 prime and a < p, with an
+  // addition chain of 253 squarings and 13 multiplications (Field.mul folds
+  // instead of dividing for this p).
+  func sqrtSecp256k1(a : Nat) : Nat {
+    func m(x : Nat, y : Nat) : Nat = Field.mul(x, y, SECP256K1_P);
+    // x^(2^n)
+    func sqrN(x : Nat, n : Nat) : Nat {
+      var r = x;
+      for (_ in Nat.range(0, n)) {
+        r := Field.mul(r, r, SECP256K1_P);
+      };
+      r;
+    };
+    // xK = a^(2^K - 1)
+    let x2 = m(sqrN(a, 1), a);
+    let x3 = m(sqrN(x2, 1), a);
+    let x6 = m(sqrN(x3, 3), x3);
+    let x9 = m(sqrN(x6, 3), x3);
+    let x11 = m(sqrN(x9, 2), x2);
+    let x22 = m(sqrN(x11, 11), x11);
+    let x44 = m(sqrN(x22, 22), x22);
+    let x88 = m(sqrN(x44, 44), x44);
+    let x176 = m(sqrN(x88, 88), x88);
+    let x220 = m(sqrN(x176, 44), x44);
+    let x223 = m(sqrN(x220, 3), x3);
+    let t = m(sqrN(m(sqrN(x223, 23), x22), 6), x2);
+    sqrN(t, 2);
+  };
+
   // Arithmetic computations modulo n over the given _value.
   /// Field element over modulus `n`.
   ///
@@ -86,7 +119,11 @@ module {
     ///
     /// Never traps.
     public func sqrt() : Fp {
-      Fp(Field.pow(value, (n + 1) / 4, n), n);
+      if (n == SECP256K1_P) {
+        Fp(sqrtSecp256k1(value), n);
+      } else {
+        Fp(Field.pow(value, (n + 1) / 4, n), n);
+      };
     };
   };
 };

@@ -1,3 +1,6 @@
+import Int "mo:core/Int";
+import Nat "mo:core/Nat";
+
 import Numbers "../../src/ec/Numbers";
 import TestUtils "../TestUtils";
 
@@ -189,4 +192,53 @@ runTest({
   title = "Non-adjacent form representation";
   fn = testToNaf;
   vectors = toNafTestVectors;
+});
+
+// Checks the defining properties of a width-`w` NAF of `n`.
+func checkWnaf(n : Int, w : Nat) {
+  let digits = Numbers.toWnaf(n, w);
+  let bound : Int = 2 ** (w - 1 : Nat);
+  var sum : Int = 0;
+  var lastNonZero : ?Nat = null;
+  for (i in Nat.range(0, digits.size())) {
+    let d = digits[i];
+    if (d != 0) {
+      assert (d % 2 != 0);
+      assert (Int.abs(d) < bound);
+      switch (lastNonZero) {
+        case (?j) assert (i >= j + w);
+        case null {};
+      };
+      lastNonZero := ?i;
+    };
+    sum += d * 2 ** i;
+  };
+  assert (sum == n);
+  if (digits.size() > 0) assert (digits[digits.size() - 1] != 0);
+};
+
+let wnafInputs : [Int] = [
+  0,
+  1,
+  -1,
+  2,
+  15,
+  16,
+  17,
+  59349,
+  -29131,
+  0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364140,
+  0xe4437ed6010e88286f547fa90abfe4c3,
+  -0x3086d221a7d46bcde86c90e49284eb15,
+];
+
+runTest({
+  title = "Width-w non-adjacent form representation";
+  fn = func(n : Int) {
+    for (w in Nat.range(2, 7)) {
+      checkWnaf(n, w);
+    };
+    if (n >= 0) assert (Numbers.toWnaf(n, 2) == Numbers.toNaf(n));
+  };
+  vectors = wnafInputs;
 });

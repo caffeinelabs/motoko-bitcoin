@@ -10,19 +10,54 @@ import Nat "mo:core/Nat";
 import Numbers "Numbers";
 
 module {
+  // The field prime of secp256k1, 2^256 - 2^32 - 977, for which `mul` folds
+  // instead of dividing.
+  let SECP256K1_P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
+  // 2^256 - p = 2^32 + 977
+  let SECP256K1_C : Nat = 0x1000003d1;
+  let TWO_POW_512 : Nat = 0x100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
+
+  // Reduces t < 2^512 modulo SECP256K1_P by folding the bits above 2^256
+  // back in, using 2^256 = 2^32 + 977 (mod p): two folds bring t below
+  // 2^256 + 2^67 < 2p.
+  func reduceSecp256k1(t : Nat) : Nat {
+    let tHi = Nat.bitshiftRight(t, 256);
+    let tLo : Nat = t - Nat.bitshiftLeft(tHi, 256);
+    let u = tLo + tHi * SECP256K1_C;
+    let uHi = Nat.bitshiftRight(u, 256);
+    let uLo : Nat = u - Nat.bitshiftLeft(uHi, 256);
+    let v = uLo + uHi * SECP256K1_C;
+    if (v >= SECP256K1_P) v - SECP256K1_P else v;
+  };
+
   // Compute a ** -1 mod n.
   /// Computes modular inverse of `a` modulo `n`.
   ///
   /// Never traps. Returns `null` when `gcd(a, n) != 1` (in particular when
   /// `a == 0` or when `n` is composite and `a` shares a factor with `n`).
   public func inverse(a : Nat, n : Nat) : ?Nat {
-    let (gcd, x, _) = Numbers.eea(a, n);
+    // Every value is congruent to 0 mod 1; return the canonical residue.
+    if (n == 1) return ?0;
+    // Iterative extended Euclid that tracks only the coefficient of `a`:
+    // one bignum division per step. Invariant: t_i * a = r_i (mod n).
+    var r0 : Nat = n;
+    var r1 : Nat = a;
+    var t0 : Int = 0;
+    var t1 : Int = 1;
+    while (r1 != 0) {
+      let q = r0 / r1;
+      let r2 : Nat = r0 - q * r1;
+      r0 := r1;
+      r1 := r2;
+      let t2 = t0 - q * t1;
+      t0 := t1;
+      t1 := t2;
+    };
 
-    if (gcd != 1) {
+    if (r0 != 1) {
       null;
     } else {
-      let inverse = if (x < 0) x + n else x;
-      ?Int.abs(inverse);
+      ?Int.abs(if (t0 < 0) t0 + n else t0);
     };
   };
 
@@ -68,7 +103,8 @@ module {
   ///
   /// Traps on division by zero when `n == 0`.
   public func mul(a : Nat, b : Nat, n : Nat) : Nat {
-    (a * b) % n;
+    let t = a * b;
+    if (n == SECP256K1_P and t < TWO_POW_512) reduceSecp256k1(t) else t % n;
   };
 
   // Compute a - b  mod n.

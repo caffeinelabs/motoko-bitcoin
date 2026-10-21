@@ -7,6 +7,8 @@ import Common "../../src/Common";
 import Curves "../../src/ec/Curves";
 import Hex "../Hex";
 import Jacobi "../../src/ec/Jacobi";
+import Numbers "../../src/ec/Numbers";
+import Secp256k1Generator "../../src/ec/Secp256k1Generator";
 import Secp256k1TestVectors "Secp256k1TestVectors";
 import TestUtils "../TestUtils";
 import WycheproofEcdhTestVectors "wycheproofEcdhTestVectors";
@@ -187,3 +189,99 @@ runTest({
   fn = testWycheproofEcdh;
   vectors = WycheproofEcdhTestVectors.testVectors;
 });
+
+type MulAddVector = {
+  point1 : Jacobi.Point;
+  a : Nat;
+  point2 : Jacobi.Point;
+  b : Nat;
+};
+
+func testMulAdd({ point1; a; point2; b } : MulAddVector) {
+  let expected = Jacobi.add(Jacobi.mul(point1, a), Jacobi.mul(point2, b));
+  let actual = Jacobi.mulAdd(point1, a, point2, b);
+  assert (Jacobi.isEqual(expected, actual));
+};
+
+let mulAddVectors : [MulAddVector] = do {
+  let curve = Curves.secp256k1;
+  let r = curve.r;
+  let g = Jacobi.base(curve);
+  let q = Jacobi.mul(g, 0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5);
+  let inf : Jacobi.Point = #infinity(curve);
+  let k1 = 0x4b688df40bcedbe641ddb16ff0a1842d9c67ea1c3bf63f3e0471baa664531d1a;
+  let k2 = 0xe4437ed6010e88286f547fa90abfe4c3e4437ed6010e88286f547fa90abfe4c3;
+  [
+    { point1 = g; a = k1; point2 = q; b = k2 },
+    { point1 = g; a = r - 1; point2 = q; b = r - 1 },
+    { point1 = g; a = 1; point2 = q; b = 1 },
+    { point1 = g; a = 0; point2 = q; b = k2 },
+    { point1 = g; a = k1; point2 = q; b = 0 },
+    { point1 = g; a = 0; point2 = q; b = 0 },
+    { point1 = inf; a = k1; point2 = q; b = k2 },
+    { point1 = g; a = k1; point2 = inf; b = k2 },
+    // Same point: the sum needs a doubling inside the shared loop.
+    { point1 = g; a = k1; point2 = g; b = k1 },
+    { point1 = g; a = k1; point2 = g; b = k2 },
+    // Cancels to the point at infinity.
+    { point1 = g; a = k1; point2 = g; b = r - k1 },
+    { point1 = g; a = k1; point2 = Jacobi.neg(g); b = k1 },
+    // Scalars of r and above.
+    { point1 = g; a = k1 + r; point2 = q; b = r },
+  ];
+};
+
+runTest({
+  title = "Combined multiplication a * P1 + b * P2";
+  fn = testMulAdd;
+  vectors = mulAddVectors;
+});
+
+// Double-and-add with Jacobi.double and Jacobi.add only, independent of
+// the GLV and table code in Jacobi.mul.
+func doubleAndAdd(point : Jacobi.Point, k : Nat) : Jacobi.Point {
+  var acc : Jacobi.Point = #infinity(Curves.secp256k1);
+  for (bit in Numbers.toBinary(k).values()) {
+    acc := Jacobi.double(acc);
+    if (bit) acc := Jacobi.add(acc, point);
+  };
+  acc;
+};
+
+do {
+  let curve = Curves.secp256k1;
+  let ?glv = curve.glv else Runtime.trap("secp256k1 has GLV parameters");
+  let g = Jacobi.base(curve);
+  let twoG = Jacobi.double(g);
+  // phi(G) = (beta * x, y) must equal lambda * G.
+  let (phiX, phiY, _) = Secp256k1Generator.phiMultiples[0];
+  assert (Jacobi.isEqual(Jacobi.fromNat(phiX, phiY, 1, curve), doubleAndAdd(g, glv.lambda)));
+
+  var expected = g;
+  for (i in Nat.range(0, Secp256k1Generator.multiples.size())) {
+    let (x, y, z) = Secp256k1Generator.multiples[i];
+    let (px, py, pz) = Secp256k1Generator.phiMultiples[i];
+    assert (z == 1 and pz == 1);
+    // (2i + 1) * G, built as G + 2G + ... + 2G.
+    assert (Jacobi.isEqual(Jacobi.fromNat(x, y, 1, curve), expected));
+    assert (px == glv.beta * x % curve.p and py == y);
+    expected := Jacobi.add(expected, twoG);
+  };
+
+  // H = 2^shift * G by repeated doubling, and phi(H) = lambda * H.
+  var h = g;
+  for (_ in Nat.range(0, Secp256k1Generator.shift)) h := Jacobi.double(h);
+  let twoH = Jacobi.double(h);
+  let (phiHX, phiHY, _) = Secp256k1Generator.phiShiftedMultiples[0];
+  assert (Jacobi.isEqual(Jacobi.fromNat(phiHX, phiHY, 1, curve), doubleAndAdd(g, glv.lambda * 2 ** Secp256k1Generator.shift % curve.r)));
+
+  var expectedH = h;
+  for (i in Nat.range(0, Secp256k1Generator.shiftedMultiples.size())) {
+    let (x, y, z) = Secp256k1Generator.shiftedMultiples[i];
+    let (px, py, pz) = Secp256k1Generator.phiShiftedMultiples[i];
+    assert (z == 1 and pz == 1);
+    assert (Jacobi.isEqual(Jacobi.fromNat(x, y, 1, curve), expectedH));
+    assert (px == glv.beta * x % curve.p and py == y);
+    expectedH := Jacobi.add(expectedH, twoH);
+  };
+};

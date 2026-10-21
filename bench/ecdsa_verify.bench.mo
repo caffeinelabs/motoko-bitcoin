@@ -10,7 +10,9 @@ import Curves "../src/ec/Curves";
 import Der "../src/ecdsa/Der";
 import Ecdsa "../src/ecdsa/Ecdsa";
 import PublicKey "../src/ecdsa/Publickey";
+import Secp256r1 "../test/ec/Secp256r1";
 import TestVectors "../test/ecdsa/wycheproofEcdsaSecp256k1TestVectors";
+import TestVectorsR1 "../test/ecdsa/wycheproofEcdsaSecp256r1TestVectors";
 
 module {
 
@@ -48,10 +50,12 @@ module {
       name = "ECDSA verify: DER vs raw (DER decode cost)";
       description = "Compare verifying using DER decode per run vs reusing parsed signature";
       rows = ["DER+verify", "verify (preparsed)"];
-      cols = ["sample 0", "sample 1"];
+      cols = ["sample 0", "sample 1", "secp256r1"];
     };
 
-    let samples = [TestVectors.testVectors[0], TestVectors.testVectors[2]];
+    // Valid signatures; the secp256r1 one exercises the generic code paths.
+    let samples = [TestVectors.testVectors[0], TestVectors.testVectors[2], TestVectorsR1.testVectors[2]];
+    let curves = [Curves.secp256k1, Curves.secp256k1, Secp256r1.curve];
 
     // Pre-parse signatures and keys
     let parsed = Array.tabulate<(Ecdsa.PublicKey, Ecdsa.Signature)>(
@@ -60,7 +64,7 @@ module {
         let s = samples[i];
         let keyBytes = decode(s.key);
         let sigBytes = decode(s.sig);
-        let pk = switch (PublicKey.decode(#sec1(keyBytes, Curves.secp256k1))) {
+        let pk = switch (PublicKey.decode(#sec1(keyBytes, curves[i]))) {
           case (#ok v) v;
           case (_) Runtime.trap("Invalid ECDSA benchmark public key fixture");
         };
@@ -79,7 +83,7 @@ module {
         case (0) {
           let keyBytes = decode(s.key);
           let sigBytes = decode(s.sig);
-          switch (PublicKey.decode(#sec1(keyBytes, Curves.secp256k1)), Der.decodeSignature(Blob.fromArray(sigBytes))) {
+          switch (PublicKey.decode(#sec1(keyBytes, curves[ci])), Der.decodeSignature(Blob.fromArray(sigBytes))) {
             case (#ok pk, #ok sig) { ignore Ecdsa.verify(sig, pk, msgBytes) };
             case (_) {};
           };
