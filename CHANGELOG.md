@@ -51,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     42 times faster (verify −11.4%, BIP32 derivation −7.7%).
   - Point additions with fewer field additions and subtractions (verify
     −2.3%, BIP32 derivation −2.1%).
+- Update `core` from `2.6.2` to `2.7.0`.
 - Update `sha2` from `0.3.0` to `0.3.3` (HMAC-SHA256 and HMAC-SHA512 4–10%
   faster).
 
