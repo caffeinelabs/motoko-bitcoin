@@ -2,8 +2,8 @@
 
 How much each optimization of the elliptic-curve code delivered, one row per
 step. Each step is a single commit, measured with `mops bench --locked` on
-the toolchain pinned in `mops.toml` (moc 2.0.0, pocket-ic 15.0.0, wasm-opt
-with `[optimize]`). The "Δ" columns compare a step with the row above it.
+the toolchain pinned in `mops.toml` (moc 2.0.0 up to step 17, moc 2.2.3
+from step 18 on; pocket-ic 15.0.0, wasm-opt with `[optimize]`). The "Δ" columns compare a step with the row above it.
 
 | Step                                   | ECDSA verify |      Δ | Verify heap |      Δ | BIP32 depth 5 |      Δ | `mul`, k < 2⁵⁷ |      Δ |
 | :------------------------------------- | -----------: | -----: | ----------: | -----: | ------------: | -----: | -------------: | -----: |
@@ -23,6 +23,7 @@ with `[optimize]`). The "Δ" columns compare a step with the row above it.
 | Retire `ec_arith` benchmark            |   68_401_510 |     0% |    5.65 MiB |     0% |   185_044_210 |     0% |     16_312_000 |     0% |
 | wNAF recoding on `Nat64` words         |   60_580_051 | −11.4% |    5.24 MiB |  −7.3% |   170_790_134 |  −7.7% |     15_687_416 |  −3.8% |
 | Leaner addition formulas               |   59_210_804 |  −2.3% |    5.11 MiB |  −2.5% |   167_182_713 |  −2.1% |     15_642_194 |  −0.3% |
+| moc 2.2.3                              |   59_637_855 |  +0.7% |    5.11 MiB |     0% |   168_290_299 |  +0.7% |     15_738_049 |  +0.6% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -38,6 +39,7 @@ above):
 | Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 | +0.4% | 69_958_715 |  +0.4% |
 | wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 | −8.8% | 62_263_255 | −11.0% |
 | Leaner addition formulas          |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 | −1.3% | 61_152_465 |  −1.8% |
+| moc 2.2.3                         |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 | +0.7% | 61_574_396 |  +0.7% |
 
 Columns:
 
@@ -290,6 +292,24 @@ heap (its own benchmark, measured without `wasm-opt`).
     motoko_ecdsa#4 verifies on P-256 in 122.8M, with Montgomery
     multiplication, wNAF and Shamir's trick for that curve. No code change;
     the secp256k1 numbers are unchanged.
+
+18. **moc 2.2.3.** The toolchain moves from moc 2.0.0 to 2.2.3, which makes
+    every secp256k1 operation about 0.7% slower; secp256r1 doesn't change.
+    moc 2.2.0 and 2.2.2 fixed wrong results of `Prim.shiftLeft` and
+    `Prim.shiftRight` on `Nat` for large results and shift amounts
+    (motoko#6447, #6423), and the added checks make each bignum shift more
+    expensive: 49 instructions more for a right shift and 56 more for a left
+    shift, measured on 256- and 512-bit operands. Multiplication, addition,
+    subtraction, comparison and `% p` cost the same as before. Nearly all
+    shifts come from the secp256k1 reduction in `Field.mul`, two in each
+    direction per multiplication, which is why secp256r1, which reduces with
+    `% p`, is unaffected. Counted in an instrumented run, `mulAdd` performs
+    4_138 right and 4_130 left shifts, which predicts +434k instructions; it
+    measured +422k. The rest of moc 2.2.x saves a little elsewhere (a
+    `switch` on a tuple no longer allocates, and boxed `Nat64` values are
+    smaller): the non-EC benchmarks got up to 1% cheaper and allocate up to
+    5% less. No code change. moc 2.2.3 itself only changes Candid decoding
+    and measures the same as 2.2.2.
 
 ## Tried and not adopted
 

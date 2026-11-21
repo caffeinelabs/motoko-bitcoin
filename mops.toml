@@ -15,7 +15,7 @@ test = "2.1.2"
 bench-helper = "0.0.4"
 
 [toolchain]
-moc = "2.0.0"
+moc = "2.2.3"
 pocket-ic = "15.0.0"
 wasmtime = "49.0.3"
 wasm-opt = "133"
