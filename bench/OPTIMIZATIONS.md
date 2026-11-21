@@ -24,6 +24,7 @@ from step 18 on; pocket-ic 15.0.0, wasm-opt with `[optimize]`). The "Δ" columns
 | wNAF recoding on `Nat64` words         |   60_580_051 | −11.4% |    5.24 MiB |  −7.3% |   170_790_134 |  −7.7% |     15_687_416 |  −3.8% |
 | Leaner addition formulas               |   59_210_804 |  −2.3% |    5.11 MiB |  −2.5% |   167_182_713 |  −2.1% |     15_642_194 |  −0.3% |
 | moc 2.2.3                              |   59_637_855 |  +0.7% |    5.11 MiB |     0% |   168_290_299 |  +0.7% |     15_738_049 |  +0.6% |
+| sha2 0.3.3                             |   59_637_855 |     0% |    5.11 MiB |     0% |   168_252_199 |     0% |     15_738_049 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -310,6 +311,15 @@ heap (its own benchmark, measured without `wasm-opt`).
     smaller): the non-EC benchmarks got up to 1% cheaper and allocate up to
     5% less. No code change. moc 2.2.3 itself only changes Candid decoding
     and measures the same as 2.2.2.
+
+19. **sha2 0.3.3.** Updating the `sha2` dependency from 0.3.0 to 0.3.3
+    makes HMAC-SHA256 4–8% and HMAC-SHA512 5–10% cheaper
+    (`bench/hash_hmac.bench.mo`, longer inputs gain more). BIP32 derivation
+    hashes little compared with its elliptic-curve work and saves 38k
+    instructions at depth 5 (−0.02%); Base58Check and transaction sighashes
+    save up to 1%. The elliptic-curve benchmarks don't use SHA-2 and don't
+    change. sha2 0.3.3 declares core 2.7.0, but the package still pins and
+    compiles against core 2.6.2.
 
 ## Tried and not adopted
 
