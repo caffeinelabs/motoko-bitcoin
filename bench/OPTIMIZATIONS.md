@@ -1,7 +1,7 @@
 # Optimization log
 
 How much each optimization of the elliptic-curve code delivered, one row per
-step. All of them shipped in 0.2.3. Each step is a single commit, measured
+step. All of them shipped in 0.3.0. Each step is a single commit, measured
 with `mops bench --locked` on the toolchain pinned in `mops.toml` (moc 2.0.0
 up to step 17, moc 2.2.3 from step 18 on; pocket-ic 15.0.0, wasm-opt with
 `[optimize]`). The "Δ" columns compare a step with the row above it.
