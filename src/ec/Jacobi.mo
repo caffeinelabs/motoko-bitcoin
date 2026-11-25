@@ -273,7 +273,15 @@ module {
     curve : Curves.Curve,
   ) : ?[WnafTerm] {
     let m = Field.modulus(curve.p);
-    let ?table1 = oddMultiples(x, y, curve) else return null;
+    // Odd multiples of P with one shared Z if possible.
+    let size = 2 ** (WNAF_WINDOW - 2 : Nat);
+    let table1 = switch (coZOddMultiples(x, y, size, curve.a, m)) {
+      case (?table) table;
+      case null {
+        let ?table = oddMultiples(x, y, curve) else return null;
+        table;
+      };
+    };
     // Their images under phi(X, Y, Z) = (beta * X, Y, Z).
     let beta = glv.beta % m.0;
     let table2 = table1.map<Coords, Coords>(func(q) = (fmul(beta, q.0, m), q.1, q.2));
@@ -298,6 +306,41 @@ module {
     };
     func orderTwo(q : Coords) : Bool = q.1 == 0 and q.2 != 0;
     if (orderTwo(twoP) or table.any(orderTwo)) null else ?table.toArray();
+  };
+
+  // The odd multiples P, 3P, ..., (2 * size - 1)P of the affine point
+  // P = (x, y), all with the same Z, without a field inversion (as in
+  // libsecp256k1). On the isomorphic curve that scales affine coordinates
+  // by (dz^2, dz^3), where 2P = (dx, dy, dz), 2P is affine, so each entry
+  // takes a mixed addition, and a backward pass brings all entries to the
+  // last Z. Returns null if an addition meets equal x coordinates, which
+  // only points of small order do, or if an entry has order 2.
+  func coZOddMultiples(x : Nat, y : Nat, size : Nat, a : Nat, m : Modulus) : ?[Coords] {
+    let (dx, dy, dz) = doubleWithZ1(x, y, a, m);
+    if (dz == 0) return null;
+    let dz2 = fsqr(dz, m);
+    let table = VarArray.repeat<Coords>((fmul(x, dz2, m), fmul(y, fmul(dz2, dz, m), m), 1), size);
+    // h[i] = Z[i] / Z[i - 1]
+    let h = VarArray.repeat<Nat>(1, size);
+    for (i in Nat.range(1, size)) {
+      let (X1, Y1, Z1) = table[i - 1];
+      h[i] := fsub(fmul(dx, fsqr(Z1, m), m), X1, m);
+      if (h[i] == 0) return null;
+      table[i] := addWithZ2Eq1(X1, Y1, Z1, dx, dy, 1, a, m);
+    };
+    // Entry i - 1 is scaled by f = h[i] * ... * h[size - 1].
+    var f = 1;
+    for (i in Nat.rangeByInclusive(size - 1, 1, -1)) {
+      f := fmul(f, h[i], m);
+      let (X, Y, _) = table[i - 1];
+      let ff = fsqr(f, m);
+      table[i - 1] := (fmul(X, ff, m), fmul(Y, fmul(ff, f, m), m), 0);
+    };
+    // An entry of order 2 has Y = 0, which the formulas read as infinity.
+    if (table.any(func(q : Coords) : Bool = q.1 == 0)) return null;
+    // On the original curve, the shared Z is the last Z times dz.
+    let z = fmul(table[size - 1].2, dz, m);
+    ?Array.tabulate<Coords>(size, func(i) = (table[i].0, table[i].1, z));
   };
 
   // True if (x, y) is the generator of secp256k1, for which precomputed
@@ -363,6 +406,12 @@ module {
   // Computes the sum of all `terms` with a Straus/Shamir-style interleaved
   // wNAF loop: the terms share one doubling per digit position, and each
   // non-zero digit adds one table entry.
+  //
+  // Tables whose entries share one Z (affine tables have Z = 1) take mixed
+  // additions. On curves with a = 0, whose formulas don't depend on the
+  // curve constants, the loop runs on the isomorphic curve on which the
+  // entries with the shared Z zg != 1 of `coZOddMultiples` are affine; there
+  // affine entries have Z = 1 / zg, and the result's Z is multiplied by zg.
   func wnafSum(terms : [WnafTerm], curve : Curves.Curve) : Point {
     let (a, m) = (curve.a, Field.modulus(curve.p));
     var len = 0;
@@ -373,16 +422,57 @@ module {
       return #infinity(curve);
     };
 
+    // The Z shared by all entries of each table, if any.
+    let zs = terms.map<WnafTerm, ?Nat>(
+      func(term) {
+        let z = term.table[0].2;
+        if (term.table.all(func(q : Coords) : Bool = q.2 == z)) ?z else null;
+      }
+    );
+    var zg = 1;
+    if (a == 0) {
+      label search for (z in zs.values()) {
+        switch z {
+          case (?z) if (z != 1) { zg := z; break search };
+          case null {};
+        };
+      };
+    };
+    // The inverse of an entry's Z on the isomorphic curve, or null for
+    // entries added as general Jacobian points.
+    func zinv(z : ?Nat) : ?Nat = switch z {
+      case (?1) ?zg;
+      case (?z) if (z == zg) ?1 else null;
+      case null null;
+    };
+    // With tables of two different shared Z, stay on the original curve.
+    if (zs.any(func(z : ?Nat) : Bool = zinv(z) == null)) zg := 1;
+    let zinvs = zs.map(zinv);
+    let zg2 = fsqr(zg, m);
+    let zg3 = fmul(zg2, zg, m);
+
     var acc : Coords = (0, 0, 1);
     for (i in Nat.rangeByInclusive(len - 1, 0, -1)) {
       acc := doDouble(acc.0, acc.1, acc.2, a, m);
-      for (term in terms.values()) {
+      for (t in terms.keys()) {
+        let term = terms[t];
         if (i < term.digits.size()) {
           let d = term.digits[i];
           if (d != 0) {
             let q = term.table[Int.abs(d) / 2];
             let qy = if ((d < 0) != term.negative) fsub(0, q.1, m) else q.1;
-            acc := _add(acc.0, acc.1, acc.2, q.0, qy, q.2, a, m);
+            acc := switch (zinvs[t]) {
+              case null _add(acc.0, acc.1, acc.2, q.0, qy, q.2, a, m);
+              case (?zi) {
+                if (acc.1 != 0 and acc.2 != 0) {
+                  addWithZ2Eq1(acc.0, acc.1, acc.2, q.0, qy, zi, a, m);
+                } else {
+                  // acc is infinity: the entry, as an affine point on the
+                  // isomorphic curve.
+                  if (zi == 1) (q.0, qy, 1) else (fmul(q.0, zg2, m), fmul(qy, zg3, m), 1);
+                };
+              };
+            };
           };
         };
       };
@@ -390,7 +480,8 @@ module {
     if (acc.1 == 0 or acc.2 == 0) {
       return #infinity(curve);
     };
-    #point(curve.Fp(acc.0), curve.Fp(acc.1), curve.Fp(acc.2), curve);
+    let z = if (zg == 1) acc.2 else fmul(acc.2, zg, m);
+    #point(curve.Fp(acc.0), curve.Fp(acc.1), curve.Fp(z), curve);
   };
 
   /// Computes `a * point1 + b * point2`.
@@ -567,25 +658,29 @@ module {
     (X3, Y3, Z3);
   };
 
-  // P1 + P2 for an affine P2 (Z2 = 1): 8 multiplications and 3 squarings,
-  // in the H^3 form that needs few additions and subtractions.
+  // P1 + P2 for P2 = (X2, Y2, 1 / zinv), usually affine (zinv = 1): 8
+  // multiplications and 3 squarings, in the H^3 form that needs few
+  // additions and subtractions. Another zinv costs one multiplication more
+  // (libsecp256k1's gej_add_zinv_var).
   func addWithZ2Eq1(
     X1 : Nat,
     Y1 : Nat,
     Z1 : Nat,
     X2 : Nat,
     Y2 : Nat,
+    zinv : Nat,
     a : Nat,
     m : Modulus,
   ) : Coords {
-    let Z1Z1 = fsqr(Z1, m);
-    let U2 = fmul(X2, Z1Z1, m);
-    let S2 = fmul(Y2, fmul(Z1, Z1Z1, m), m);
+    let Z = if (zinv == 1) Z1 else fmul(Z1, zinv, m);
+    let ZZ = fsqr(Z, m);
+    let U2 = fmul(X2, ZZ, m);
+    let S2 = fmul(Y2, fmul(Z, ZZ, m), m);
     let H = fsub(U2, X1, m);
     let r = fsub(S2, Y1, m);
 
     if (H == 0) {
-      return if (r == 0) doubleWithZ1(X2, Y2, a, m) else (0, 0, 0);
+      return if (r == 0) doDouble(X1, Y1, Z1, a, m) else (0, 0, 0);
     };
 
     let HH = fsqr(H, m);
@@ -662,11 +757,11 @@ module {
     };
 
     if (Z1 == 1) {
-      return addWithZ2Eq1(X2, Y2, Z2, X1, Y1, a, m);
+      return addWithZ2Eq1(X2, Y2, Z2, X1, Y1, 1, a, m);
     };
 
     if (Z2 == 1) {
-      return addWithZ2Eq1(X1, Y1, Z1, X2, Y2, a, m);
+      return addWithZ2Eq1(X1, Y1, Z1, X2, Y2, 1, a, m);
     };
 
     return addWithArbitraryZ(X1, Y1, Z1, X2, Y2, Z2, a, m);

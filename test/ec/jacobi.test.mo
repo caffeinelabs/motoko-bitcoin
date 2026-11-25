@@ -232,6 +232,11 @@ let mulAddVectors : [MulAddVector] = do {
     { point1 = g; a = k1; point2 = Jacobi.neg(g); b = k1 },
     // Scalars of r and above.
     { point1 = g; a = k1 + r; point2 = q; b = r },
+    // Two points other than the generator: tables with different Z.
+    { point1 = q; a = k1; point2 = Jacobi.double(q); b = k2 },
+    { point1 = Jacobi.double(q); a = k2; point2 = q; b = k1 },
+    { point1 = q; a = k1; point2 = q; b = r - k1 },
+    { point1 = q; a = k1; point2 = Jacobi.neg(q); b = k1 },
   ];
 };
 

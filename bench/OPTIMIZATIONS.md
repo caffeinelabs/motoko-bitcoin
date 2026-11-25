@@ -43,6 +43,7 @@ the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
 | Barrett reduction for other primes     |   50_204_479 |  +0.1% |    3.39 MiB |     0% |   142_341_298 |  +0.1% |     13_611_298 |  +0.1% |
 | `Field.pow` by machine words           |   50_204_473 |     0% |    3.39 MiB |     0% |   142_268_903 |  −0.1% |     13_611_609 |     0% |
 | Doubling for a = −3                    |   50_204_349 |     0% |    3.39 MiB |     0% |   142_268_593 |     0% |     13_611_556 |     0% |
+| Shared-Z tables for Q                  |   47_839_854 |  −4.7% |    3.24 MiB |  −4.4% |   142_127_226 |  −0.1% |     13_619_009 |  +0.1% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -65,6 +66,7 @@ above):
 | Barrett reduction for other primes |  5_613_450 |  +0.1% | 22_200_246 |  +0.1% | 42_750_784 |  +0.1% | 52_180_855 |  +0.1% |
 | `Field.pow` by machine words       |  5_598_658 |  −0.3% | 22_200_240 |     0% | 42_750_778 |     0% | 52_180_849 |     0% |
 | Doubling for a = −3                |  5_598_658 |     0% | 22_200_179 |     0% | 42_750_653 |     0% | 52_180_724 |     0% |
+| Shared-Z tables for Q              |  5_598_658 |     0% | 22_148_304 |  −0.2% | 38_908_267 |  −9.0% | 49_857_860 |  −4.5% |
 
 Columns:
 
@@ -424,6 +426,27 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
     secp256r1: verify 101_067_328 → 91_205_243 instructions (−9.8%), heap
     6.09 → 5.59 MiB (−8.2%); `mul` −11.5%, `mulBase` −11.8%, `mulAdd`
     −9.5%. secp256k1 doesn't change (+0.01%).
+
+27. **Shared-Z tables for Q.** The table of odd multiples of a point Q
+    that isn't the generator had a different Z per entry, so each addition
+    in the main loop was a full addition (11M + 5S). The table is now built
+    as in libsecp256k1, without an inversion: 2Q first, the other entries
+    by mixed additions on the isomorphic curve on which 2Q is affine, and a
+    backward pass that brings all of them to one shared Z. On curves with
+    a = 0 the main loop then runs on the isomorphic curve on which those
+    entries are affine, so they take a mixed addition (8M + 3S); the
+    affine generator tables have Z = 1/zg there, which costs one extra
+    multiplication per addition (libsecp256k1's `gej_add_zinv_var`, now a
+    parameter of the mixed addition). `mul` −9.0%, `mulAdd` −4.5%, verify
+    −4.7%; `mulBase` and BIP32 derivation don't change. A first version
+    that also rescaled the table of a second non-generator point, used a
+    separate copy of the loop for `mulBase` and a separate addition for
+    the generator tables saved 0.6–0.7% more, with 179 instead of 85 added
+    lines. Lazy reduction was measured first and not adopted: in one
+    `mulAdd`, 1_075 of 2_171 field additions and subtractions take the
+    extra subtraction, at most 3.5% of the instructions, and because the
+    secp256k1 prime is so close to 2²⁵⁶ only a bound of 2p would save a
+    part of that, at the cost of extra checks at every equality test.
 
 ## Tried and not adopted
 

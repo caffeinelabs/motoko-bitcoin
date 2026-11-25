@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on curves other than secp256k1, such as secp256r1, −48.5%).
 - A cheaper point doubling for curves with a = −3, such as secp256r1 (verify
   −9.8%, `mul` −11.5%).
+- Speed up multiplication of points other than the secp256k1 generator
+  (secp256k1: `Jacobi.mul()` −9.0%, `Jacobi.mulAdd()` −4.5%, ECDSA verification
+  −4.7%).
 
 ## [0.3.0] - 2026-11-26
 
