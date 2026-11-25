@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   constructs its own `Curve` values must add it (`glv = null` keeps the
   previous scalar multiplication).
 
+### Fixed
+
+- **Breaking:** `Der.decodeSignature()` rejects non-strict DER (negative or
+  non-minimal integers), as Bitcoin does since BIP66.
+
 ## [0.2.2] - 2026-10-16
 
 ### Changed
