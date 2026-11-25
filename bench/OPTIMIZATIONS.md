@@ -26,6 +26,7 @@ from step 18 on; pocket-ic 15.0.0, wasm-opt with `[optimize]`). The "Δ" columns
 | moc 2.2.3                              |   59_637_855 |  +0.7% |    5.11 MiB |     0% |   168_290_299 |  +0.7% |     15_738_049 |  +0.6% |
 | sha2 0.3.3                             |   59_637_855 |     0% |    5.11 MiB |     0% |   168_252_199 |     0% |     15_738_049 |     0% |
 | core 2.7.0                             |   59_637_855 |     0% |    5.11 MiB |     0% |   168_252_199 |     0% |     15_738_049 |     0% |
+| wNAF for curves without GLV            |   59_637_288 |     0% |    5.11 MiB |     0% |   168_252_204 |     0% |     15_738_353 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -42,6 +43,7 @@ above):
 | wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 | −8.8% | 62_263_255 | −11.0% |
 | Leaner addition formulas          |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 | −1.3% | 61_152_465 |  −1.8% |
 | moc 2.2.3                         |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 | +0.7% | 61_574_396 |  +0.7% |
+| wNAF for curves without GLV       |  6_871_444 |     0% | 26_028_211 |     0% | 50_263_742 |    0% | 61_574_784 |     0% |
 
 Columns:
 
@@ -324,6 +326,22 @@ heap (its own benchmark, measured without `wasm-opt`).
 
 20. **core 2.7.0.** Updating the `core` dependency from 2.6.2 to 2.7.0
     changes none of the 188 benchmark cells, instructions or heap.
+
+21. **wNAF for curves without GLV.** Curves with `glv = null` (every user-defined `Curve`, and
+    secp256r1 in the tests) multiplied with width-2 NAF, about one addition
+    per three bits, and `mulAdd` fell back to two separate multiplications
+    plus an addition, so ECDSA verification did 512 doublings. Now they use
+    the same `wnafSum` loop as secp256k1, with one term per scalar: width-5
+    wNAF against a table of the odd multiples P, 3P, …, 15P (one doubling
+    and seven additions to build), and `mulAdd` shares one doubling per bit
+    between both scalars. There are no precomputed generator tables for
+    these curves, and the field reduction is still `% p`. On secp256r1:
+    verify 260_500_021 → 141_756_826 instructions (−45.6%) and 11.31 →
+    6.11 MiB of heap (−46.0%); `mulAdd` −44.1%; `mul` and `mulBase` −9.9%.
+    secp256k1 doesn't change. Tests check `mul`, `mulBase` and `mulAdd`
+    against double-and-add on secp256r1, on secp256k1 with its GLV
+    parameters removed, and exhaustively on two small curves of prime order
+    (5 and 13), where table entries and sums reach the point at infinity.
 
 ## Tried and not adopted
 
