@@ -130,10 +130,14 @@ module {
   /// - `"Could not parse s sequence."` — truncated `s` payload.
   /// - `"Invalid r size."` — `r` is empty or longer than 33 bytes.
   /// - `"Invalid s size."` — `s` is empty or longer than 33 bytes.
-  /// - `"r value cannot be negative."` — `r` is 33 bytes but the leading
-  ///   byte is not `0x00`.
-  /// - `"s value cannot be negative."` — `s` is 33 bytes but the leading
-  ///   byte is not `0x00`.
+  /// - `"r value cannot be negative."` — the first byte of `r` has its
+  ///   high bit set (DER would read it as negative).
+  /// - `"s value cannot be negative."` — same for `s`.
+  /// - `"r value has excess leading zeros."` — `r` starts with `0x00` that
+  ///   isn't needed, so the encoding isn't minimal.
+  /// - `"s value has excess leading zeros."` — same for `s`.
+  /// - `"Invalid r size."`/`"Invalid s size."` also cover a 33-byte value
+  ///   that doesn't start with `0x00`, which doesn't fit in 256 bits.
   /// - `"Wrong total length"` — declared total length does not match
   ///   `rLen + sLen + 4`.
   /// - `"Did not consume all data"` — trailing bytes after the declared
@@ -185,12 +189,28 @@ module {
       return #err("Invalid s size.");
     };
 
-    if (rData.size() == 33 and rData[0] != 0) {
+    // Strict DER (as in BIP66): an INTEGER is minimally encoded and, for
+    // r and s, not negative, so each signature has exactly one encoding.
+    if (rData[0] >= 0x80) {
       return #err("r value cannot be negative.");
     };
+    if (rData.size() > 1 and rData[0] == 0 and rData[1] < 0x80) {
+      return #err("r value has excess leading zeros.");
+    };
+    // 33 bytes are valid only as 0x00 followed by a byte >= 0x80.
+    if (rData.size() == 33 and rData[0] != 0) {
+      return #err("Invalid r size.");
+    };
 
-    if (sData.size() == 33 and sData[0] != 0) {
+    if (sData[0] >= 0x80) {
       return #err("s value cannot be negative.");
+    };
+    if (sData.size() > 1 and sData[0] == 0 and sData[1] < 0x80) {
+      return #err("s value has excess leading zeros.");
+    };
+    // 33 bytes are valid only as 0x00 followed by a byte >= 0x80.
+    if (sData.size() == 33 and sData[0] != 0) {
+      return #err("Invalid s size.");
     };
 
     if (totalLen != (rLen + sLen + 4)) {
