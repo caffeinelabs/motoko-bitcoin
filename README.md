@@ -189,8 +189,8 @@ optimization delivered.
 Format the code with:
 
 ```bash
-npm install --no-save prettier prettier-plugin-motoko
-npx prettier --plugin prettier-plugin-motoko --write '**/*.{mo,json,md}'
+mops format
+npx -y prettier --write '**/*.{json,md}'
 ```
 
 ## Releasing
