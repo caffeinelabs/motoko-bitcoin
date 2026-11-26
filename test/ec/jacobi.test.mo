@@ -15,6 +15,8 @@ import Secp256r1 "Secp256r1";
 import TestUtils "../TestUtils";
 import WycheproofEcdhTestVectors "wycheproofEcdhTestVectors";
 
+import { test } "mo:test";
+
 type DoublingVector = Secp256k1TestVectors.DoublingVector;
 type MultiplicationVector = Secp256k1TestVectors.MultiplicationVector;
 type BaseMultiplicationVector = Secp256k1TestVectors.BaseMultiplicationVector;
@@ -364,3 +366,46 @@ do {
     };
   };
 };
+
+// y^2 = x^3 + 1 over F_5 has order 6: P = (2, 2) generates it and
+// 3P = (4, 0) has order 2, with Y = 0, which the internal coordinates read
+// as infinity. A table of odd multiples of P would contain 3P, so P must
+// take the NAF path that adds only P. Results that are 3P can't be
+// represented and are left out.
+test(
+  "Scalar multiplication on a curve with a point of order 2",
+  func() {
+    let curve : Curves.Curve = {
+      p = 5;
+      r = 6;
+      a = 0;
+      b = 1;
+      gx = 2;
+      gy = 2;
+      Fp = func(value : Nat) : Fp.Fp = Fp.Fp(value, 5);
+      glv = null;
+    };
+    let point = Jacobi.fromNat(2, 2, 1, curve);
+    // k * P for k mod 6 = 0, 1, 2, 4, 5.
+    func multiple(k : Nat) : Jacobi.Point = switch (k % 6) {
+      case 1 point;
+      case 2 Jacobi.fromNat(0, 4, 1, curve);
+      case 4 Jacobi.fromNat(0, 1, 1, curve);
+      case 5 Jacobi.fromNat(2, 3, 1, curve);
+      case _ #infinity(curve);
+    };
+    for (k in Nat.range(0, 24)) {
+      if (k % 6 != 3) {
+        assert Jacobi.isEqual(Jacobi.mul(point, k), multiple(k));
+        assert Jacobi.isEqual(Jacobi.mulBase(k, curve), multiple(k));
+      };
+    };
+    for (a in Nat.range(0, 12)) {
+      for (b in Nat.range(0, 12)) {
+        if (a % 6 != 3 and b % 6 != 3 and (a + b) % 6 != 3) {
+          assert Jacobi.isEqual(Jacobi.mulAdd(point, a, point, b), multiple(a + b));
+        };
+      };
+    };
+  },
+);
