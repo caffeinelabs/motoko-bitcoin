@@ -42,6 +42,7 @@ the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
 | moc 2.2.5, sha2 0.3.4, core 2.7.1      |   50_175_079 |     0% |    3.39 MiB |     0% |   142_252_190 |     0% |     13_603_510 |     0% |
 | Barrett reduction for other primes     |   50_204_479 |  +0.1% |    3.39 MiB |     0% |   142_341_298 |  +0.1% |     13_611_298 |  +0.1% |
 | `Field.pow` by machine words           |   50_204_473 |     0% |    3.39 MiB |     0% |   142_268_903 |  −0.1% |     13_611_609 |     0% |
+| Doubling for a = −3                    |   50_204_349 |     0% |    3.39 MiB |     0% |   142_268_593 |     0% |     13_611_556 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -63,6 +64,7 @@ above):
 | moc 2.2.5, sha2 0.3.4, core 2.7.1  |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
 | Barrett reduction for other primes |  5_613_450 |  +0.1% | 22_200_246 |  +0.1% | 42_750_784 |  +0.1% | 52_180_855 |  +0.1% |
 | `Field.pow` by machine words       |  5_598_658 |  −0.3% | 22_200_240 |     0% | 42_750_778 |     0% | 52_180_849 |     0% |
+| Doubling for a = −3                |  5_598_658 |     0% | 22_200_179 |     0% | 42_750_653 |     0% | 52_180_724 |     0% |
 
 Columns:
 
@@ -414,6 +416,14 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
     instructions (−48.5%), heap 693 → 389 KiB (−43.9%). Decompression on
     secp256k1 gets 0.3% cheaper (the `x.pow(3)` in the curve equation);
     everything else changes by at most 0.05%.
+
+26. **Doubling for a = −3.** For a ≠ 0, doubling computed M = 3·X² + a·Z⁴
+    with three squarings and a multiplication by a. For a = −3, which
+    secp256r1 and the other NIST curves use, M = 3·(X − Z²)·(X + Z²): one
+    squaring and one multiplication. `doDouble` checks `a + 3 == p`. On
+    secp256r1: verify 101_067_328 → 91_205_243 instructions (−9.8%), heap
+    6.09 → 5.59 MiB (−8.2%); `mul` −11.5%, `mulBase` −11.8%, `mulAdd`
+    −9.5%. secp256k1 doesn't change (+0.01%).
 
 ## Tried and not adopted
 

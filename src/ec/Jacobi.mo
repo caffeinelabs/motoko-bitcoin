@@ -470,15 +470,23 @@ module {
       return (0, 0, 0);
     };
 
-    let XX = fsqr(X1, m);
     let YY = fsqr(Y1, m);
     let YYYY = fsqr(YY, m);
     // S = 4 * X1 * YY
     let S = fdbl(fdbl(fmul(X1, YY, m), m), m);
-    // M = 3 * XX + a * Z1^4; for a = 0 (secp256k1) Z1^2 isn't needed.
-    var M = fadd(fdbl(XX, m), XX, m);
-    if (a != 0) {
-      M := fadd(M, fmul(a, fsqr(fsqr(Z1, m), m), m), m);
+    // M = 3 * XX + a * Z1^4. For a = 0 (secp256k1) Z1 isn't needed; for
+    // a = -3 (secp256r1 and the other NIST curves) it is
+    // 3 * (X1 - ZZ) * (X1 + ZZ), which saves two squarings.
+    let M = if (a == 0) {
+      let XX = fsqr(X1, m);
+      fadd(fdbl(XX, m), XX, m);
+    } else if (a + 3 == m.0) {
+      let ZZ = fsqr(Z1, m);
+      let P = fmul(fsub(X1, ZZ, m), fadd(X1, ZZ, m), m);
+      fadd(fdbl(P, m), P, m);
+    } else {
+      let XX = fsqr(X1, m);
+      fadd(fadd(fdbl(XX, m), XX, m), fmul(a, fsqr(fsqr(Z1, m), m), m), m);
     };
     let T = fsub(fsqr(M, m), fdbl(S, m), m);
     // Y3 = M * (S - T) - 8 * YYYY
