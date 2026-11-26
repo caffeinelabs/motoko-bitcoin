@@ -315,3 +315,34 @@ runTest({
   };
   vectors = secp256k1Inputs;
 });
+
+// mulMod (Barrett reduction, or folding for secp256k1) against % p, for
+// primes of different bit lengths and operands near 0, p / 2 and p.
+runTest({
+  title = "mulMod";
+  fn = func(p : Nat) {
+    let m = Field.modulus(p);
+    let values : [Nat] = [0, 1, 2, p / 2, p / 2 + 1, p - 2, p - 1, p / 3 + 7, (p * 5) / 7];
+    for (a in values.values()) {
+      for (b in values.values()) {
+        if (a < p and b < p) assert Field.mulMod(a, b, m) == (a * b) % p;
+      };
+    };
+    // Operands up to 2^(2k) and above still reduce correctly.
+    assert Field.mulMod(p + 3, p + 5, m) == ((p + 3) * (p + 5)) % p;
+    assert Field.mulMod(m.3, 3, m) == (m.3 * 3) % p;
+  };
+  vectors = [
+    5,
+    7,
+    13,
+    65537,
+    0xffffffffffffffc5, // 2^64 - 59
+    0x10000000000000000000000000000000d, // 2^128 + 13 (bit length 129)
+    0xfffffffffffffffffffffffffffffffeffffffffffffffff, // P-192
+    0xffffffff00000001000000000000000000000000ffffffffffffffffffffffff, // P-256
+    0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f, // secp256k1
+    0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141, // secp256k1 n
+    2 ** 521 - 1, // P-521
+  ];
+});

@@ -143,21 +143,21 @@ let fromBytesTestCases : [FromBytesTestCase] = [
     // Invalid data.
     coords = null;
     data = [
-      0x02
+      0x02,
     ];
   },
   {
     // Invalid data.
     coords = null;
     data = [
-      0x03
+      0x03,
     ];
   },
   {
     // Invalid data.
     coords = null;
     data = [
-      0x04
+      0x04,
     ];
   },
 ];

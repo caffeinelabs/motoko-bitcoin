@@ -6,8 +6,8 @@
 
 import Int "mo:core/Int";
 import Nat "mo:core/Nat";
-
-import Numbers "Numbers";
+import Nat64 "mo:core/Nat64";
+import VarArray "mo:core/VarArray";
 
 module {
   // The field prime of secp256k1, 2^256 - 2^32 - 977, for which `mul` folds
@@ -67,14 +67,32 @@ module {
       return 1;
     };
 
-    let reversedBits = Numbers.toBinaryReversed(b);
+    let m = modulus(n);
+    let base = a % n;
+    // The exponent in 64-bit words, least significant first.
+    var count = 0;
+    var rest = b;
+    while (rest != 0) {
+      rest := Nat.bitshiftRight(rest, 64);
+      count += 1;
+    };
+    let words = VarArray.repeat<Nat64>(0, count);
+    rest := b;
+    for (i in words.keys()) {
+      words[i] := Nat64.fromIntWrap(rest);
+      rest := Nat.bitshiftRight(rest, 64);
+    };
+    // Square and multiply from the top bit down.
     var result : Nat = 1;
-
-    for (i in Nat.rangeByInclusive(reversedBits.size() - 1, 0, -1)) {
-      result := mul(result, result, n);
-
-      if (reversedBits[i]) {
-        result := mul(result, a, n);
+    var i = count;
+    while (i > 0) {
+      i -= 1;
+      let word = words[i];
+      var bit : Nat64 = if (i + 1 == count) 1 << (63 - Nat64.bitcountLeadingZero(word)) else 1 << 63;
+      while (bit != 0) {
+        result := mulMod(result, result, m);
+        if (word & bit != 0) result := mulMod(result, base, m);
+        bit >>= 1;
       };
     };
     return result;
@@ -101,6 +119,47 @@ module {
   public func mul(a : Nat, b : Nat, n : Nat) : Nat {
     let t = a * b;
     if (n == SECP256K1_P and t < TWO_POW_512) reduceSecp256k1(t) else t % n;
+  };
+
+  /// A modulus `p` with the constants of Barrett reduction, for `mulMod`:
+  /// `(p, mu, k, limit)` with the bit length k of p, mu = floor(2^(2k) / p)
+  /// and limit = 2^(2k), below which Barrett reduction is exact. mu is 0
+  /// for the secp256k1 prime, which `mulMod` reduces by folding. Build it
+  /// with `modulus(p)`. (A tuple, because its fields are read faster than a
+  /// record's.)
+  public type Modulus = (Nat, Nat, Nat32, Nat);
+
+  let SECP256K1_MODULUS : Modulus = (SECP256K1_P, 0, 256, TWO_POW_512);
+
+  /// Precomputes the constants of `mulMod` for the modulus `p > 0`. Costs
+  /// about one division; worth it for more than a few multiplications.
+  public func modulus(p : Nat) : Modulus {
+    if (p == SECP256K1_P) return SECP256K1_MODULUS;
+    // Bit length of p, 64 bits at a time.
+    var k : Nat32 = 0;
+    var rest = p;
+    while (rest >= 0x10000000000000000) {
+      rest := Nat.bitshiftRight(rest, 64);
+      k += 64;
+    };
+    k += 64 - Nat64.bitcountLeadingZero(Nat64.fromNat(rest)).toNat32();
+    let limit = Nat.bitshiftLeft(1, 2 * k);
+    (p, limit / p, k, limit);
+  };
+
+  /// Computes `(a * b) mod p` for the modulus `m = modulus(p)` with Barrett reduction instead of a
+  /// division, or by folding for the secp256k1 prime.
+  public func mulMod(a : Nat, b : Nat, m : Modulus) : Nat {
+    let (p, mu, k, limit) = m;
+    let t = a * b;
+    if (t >= limit) return t % p;
+    if (mu == 0) return reduceSecp256k1(t);
+    // q is at most 2 below floor(t / p) (Handbook of Applied Cryptography,
+    // 14.42), so at most two subtractions remain.
+    let q = Nat.bitshiftRight(Nat.bitshiftRight(t, k - 1) * mu, k + 1);
+    var r : Nat = t - q * p;
+    while (r >= p) r -= p;
+    r;
   };
 
   // Compute a - b  mod n.
