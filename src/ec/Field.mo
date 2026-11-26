@@ -7,8 +7,7 @@
 import Int "mo:core/Int";
 import Nat "mo:core/Nat";
 import Nat64 "mo:core/Nat64";
-
-import Numbers "Numbers";
+import VarArray "mo:core/VarArray";
 
 module {
   // The field prime of secp256k1, 2^256 - 2^32 - 977, for which `mul` folds
@@ -68,16 +67,32 @@ module {
       return 1;
     };
 
-    let reversedBits = Numbers.toBinaryReversed(b);
     let m = modulus(n);
     let base = a % n;
+    // The exponent in 64-bit words, least significant first.
+    var count = 0;
+    var rest = b;
+    while (rest != 0) {
+      rest := Nat.bitshiftRight(rest, 64);
+      count += 1;
+    };
+    let words = VarArray.repeat<Nat64>(0, count);
+    rest := b;
+    for (i in words.keys()) {
+      words[i] := Nat64.fromIntWrap(rest);
+      rest := Nat.bitshiftRight(rest, 64);
+    };
+    // Square and multiply from the top bit down.
     var result : Nat = 1;
-
-    for (i in Nat.rangeByInclusive(reversedBits.size() - 1, 0, -1)) {
-      result := mulMod(result, result, m);
-
-      if (reversedBits[i]) {
-        result := mulMod(result, base, m);
+    var i = count;
+    while (i > 0) {
+      i -= 1;
+      let word = words[i];
+      var bit : Nat64 = if (i + 1 == count) 1 << (63 - Nat64.bitcountLeadingZero(word)) else 1 << 63;
+      while (bit != 0) {
+        result := mulMod(result, result, m);
+        if (word & bit != 0) result := mulMod(result, base, m);
+        bit >>= 1;
       };
     };
     return result;

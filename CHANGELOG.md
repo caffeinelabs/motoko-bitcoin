@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   instructions, about 50% fewer for 1 KiB inputs.
 - Speed up elliptic-curve operations on curves other than secp256k1, such as
   secp256r1, with Barrett reduction (ECDSA verification −28.7%).
+- `Field.pow()` reads the exponent 64 bits at a time (public key decompression
+  on curves other than secp256k1, such as secp256r1, −48.5%).
 
 ## [0.3.0] - 2026-11-26
 

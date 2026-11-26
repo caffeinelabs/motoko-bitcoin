@@ -41,6 +41,7 @@ the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
 | wNAF for curves without GLV            |   50_175_402 |     0% |    3.39 MiB |     0% |   142_258_830 |     0% |     13_603_510 |     0% |
 | moc 2.2.5, sha2 0.3.4, core 2.7.1      |   50_175_079 |     0% |    3.39 MiB |     0% |   142_252_190 |     0% |     13_603_510 |     0% |
 | Barrett reduction for other primes     |   50_204_479 |  +0.1% |    3.39 MiB |     0% |   142_341_298 |  +0.1% |     13_611_298 |  +0.1% |
+| `Field.pow` by machine words           |   50_204_473 |     0% |    3.39 MiB |     0% |   142_268_903 |  −0.1% |     13_611_609 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -61,6 +62,7 @@ above):
 | wNAF for curves without GLV        |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
 | moc 2.2.5, sha2 0.3.4, core 2.7.1  |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
 | Barrett reduction for other primes |  5_613_450 |  +0.1% | 22_200_246 |  +0.1% | 42_750_784 |  +0.1% | 52_180_855 |  +0.1% |
+| `Field.pow` by machine words       |  5_598_658 |  −0.3% | 22_200_240 |     0% | 42_750_778 |     0% | 52_180_849 |     0% |
 
 Columns:
 
@@ -401,6 +403,17 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
     decompression −17.6%. Heap changes by less than 1%: the temporaries of
     Barrett reduction take about as much as the division's. secp256k1
     doesn't change (+0.06%).
+
+25. **`Field.pow` by machine words.** `Field.pow` built the exponent's bits
+    with `Numbers.toBinaryReversed`, one bignum `% 2` and `/ 2` per bit and
+    a `List` of `Bool`s: 6.3M of the 12.3M instructions of a square root on
+    secp256r1, more than the 255 squarings themselves. It now splits the
+    exponent into 64-bit words and tests the bits of each word with `Nat64`
+    operations. Square roots on secp256k1 use an addition chain and don't
+    call `pow`. On secp256r1: decompression 13_091_612 → 6_737_983
+    instructions (−48.5%), heap 693 → 389 KiB (−43.9%). Decompression on
+    secp256k1 gets 0.3% cheaper (the `x.pow(3)` in the curve equation);
+    everything else changes by at most 0.05%.
 
 ## Tried and not adopted
 
