@@ -171,10 +171,18 @@ Run all benchmarks locally:
 mops bench
 ```
 
-Since 0.2.2 the benchmarks are compiled with moc 2.0.0 and optimized with the
-`wasm-opt` post-pass (`[optimize]` in `mops.toml`). Their numbers are therefore
-not comparable with those of earlier versions: the difference comes from the
-measurement setup, not from a change in the code.
+Since 0.2.2 the benchmarks are compiled with the moc version pinned in
+`mops.toml` and optimized with the `wasm-opt` post-pass (`[optimize]` in
+`mops.toml`). Their numbers are therefore not comparable with those of earlier
+versions: the difference comes from the measurement setup, not from a change in
+the code.
+
+Compared with 0.2.2, version 0.3.0 verifies an ECDSA signature on secp256k1
+in 50.2M instructions instead of 246.3M (4.9 times faster) and derives a BIP32
+path of depth 5 in 142.3M instead of 737.2M (5.2 times faster). On secp256r1,
+verification takes 141.8M instead of 253.0M (1.8 times faster).
+[`bench/OPTIMIZATIONS.md`](bench/OPTIMIZATIONS.md) lists what each
+optimization delivered.
 
 ## Development
 

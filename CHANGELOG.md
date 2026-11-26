@@ -16,8 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Speed up elliptic-curve operations on secp256k1: ECDSA verification takes
-  76% fewer instructions than in 0.2.2 and BIP32 derivation 77% fewer (see
+- Speed up elliptic-curve operations: on secp256k1, ECDSA verification takes
+  80% fewer instructions than in 0.2.2 and BIP32 derivation 81% fewer; on
+  other curves, such as secp256r1, verification takes 44% fewer (see
   [`bench/OPTIMIZATIONS.md`](https://github.com/caffeinelabs/motoko-bitcoin/blob/main/bench/OPTIMIZATIONS.md)).
 - Update `core` from `2.6.2` to `2.7.1`.
 - Update `sha2` from `0.3.0` to `0.3.4`.
