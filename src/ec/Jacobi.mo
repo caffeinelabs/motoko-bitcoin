@@ -3,6 +3,13 @@
 /// Intended for public-data operations only; not constant-time for secret
 /// inputs.
 ///
+/// Points of order 2 are not supported. Such a point has y = 0, which the
+/// arithmetic treats as the point at infinity. Only curves with an even
+/// number of points have them; secp256k1 and secp256r1 don't. On a curve
+/// that has them, `add`, `double`, `mul`, `mulBase` and `mulAdd` can return
+/// wrong points without trapping, not only when the result has order 2 but
+/// also when an intermediate result does.
+///
 /// ```motoko name=import
 /// import Jacobi "mo:bitcoin/ec/Jacobi";
 /// ```
@@ -49,7 +56,8 @@ module {
   func fsub(a : Nat, b : Nat, p : Nat) : Nat = if (a >= b) a - b else a + p - b;
   func fdbl(a : Nat, p : Nat) : Nat = fadd(a, a, p);
 
-  /// Jacobian point representation.
+  /// Jacobian point representation. The arithmetic treats a `#point` with
+  /// y = 0 as infinity (see the module description).
   public type Point = {
     #infinity : Curves.Curve;
     #point : (Fp, Fp, Fp, Curves.Curve);
@@ -117,7 +125,9 @@ module {
     };
   };
 
-  /// Returns true if `point` is at infinity.
+  /// Returns true if `point` is at infinity, that is `#infinity` or z = 0.
+  /// A point of order 2 (y = 0, z != 0) isn't reported as infinity here,
+  /// although the arithmetic treats it as infinity.
   public func isInfinity(point : Point) : Bool {
     switch point {
       case (#infinity(_)) true;

@@ -59,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** `Der.decodeSignature()` rejects non-strict DER (negative or
   non-minimal integers), as Bitcoin does since BIP66.
+- Document that `Jacobi` doesn't support curves with an even number of
+  points: on them, its arithmetic can return wrong points.
 
 ## [0.2.3] - 2026-10-19
 
