@@ -3,6 +3,13 @@
 /// Intended for public-data operations only; not constant-time for secret
 /// inputs.
 ///
+/// Points of order 2 are not supported. Such a point has y = 0, which the
+/// arithmetic treats as the point at infinity. Only curves with an even
+/// number of points have them; secp256k1 and secp256r1 don't. On a curve
+/// that has them, `add`, `double`, `mul`, `mulBase` and `mulAdd` can return
+/// wrong points without trapping, not only when the result has order 2 but
+/// also when an intermediate result does.
+///
 /// ```motoko name=import
 /// import Jacobi "mo:bitcoin/ec/Jacobi";
 /// ```
@@ -35,8 +42,9 @@ module {
   // with Y = 0 or Z = 0 is the point at infinity.
   type Coords = (Nat, Nat, Nat);
 
-  // Window width of the wNAF digits in GLV scalar multiplication.
-  let GLV_WINDOW : Nat = 5;
+  // Window width of the wNAF digits in scalar multiplication, for the GLV
+  // halves on curves with an endomorphism and for full scalars on others.
+  let WNAF_WINDOW : Nat = 5;
 
   // Field.mul folds instead of dividing for the secp256k1 prime.
   func fmul(a : Nat, b : Nat, p : Nat) : Nat = Field.mul(a, b, p);
@@ -48,7 +56,8 @@ module {
   func fsub(a : Nat, b : Nat, p : Nat) : Nat = if (a >= b) a - b else a + p - b;
   func fdbl(a : Nat, p : Nat) : Nat = fadd(a, a, p);
 
-  /// Jacobian point representation.
+  /// Jacobian point representation. The arithmetic treats a `#point` with
+  /// y = 0 as infinity (see the module description).
   public type Point = {
     #infinity : Curves.Curve;
     #point : (Fp, Fp, Fp, Curves.Curve);
@@ -116,7 +125,9 @@ module {
     };
   };
 
-  /// Returns true if `point` is at infinity.
+  /// Returns true if `point` is at infinity, that is `#infinity` or z = 0.
+  /// A point of order 2 (y = 0, z != 0) isn't reported as infinity here,
+  /// although the arithmetic treats it as infinity.
   public func isInfinity(point : Point) : Bool {
     switch point {
       case (#infinity(_)) true;
@@ -181,36 +192,16 @@ module {
     switch (scale(point)) {
       case (#infinity(curve)) #infinity(curve);
       case (#point(x2, y2, _, curve)) {
-        switch (curve.glv) {
-          case (?glv) return wnafSum(pointTerms(x2.value, y2.value, other, glv, curve), curve);
-          case null {};
+        let terms = switch (pointTerms(x2.value, y2.value, other, curve)) {
+          case (?terms) terms;
+          // NAF, adding only P itself.
+          case null [{
+            digits = Numbers.toWnaf(other, 2);
+            table = [(x2.value, y2.value, 1)];
+            negative = false;
+          }];
         };
-        var p : Coords = (0, 0, 1);
-        let naf = Numbers.toNaf(other);
-        let y2neg = y2.neg().value;
-
-        for (i in Nat.rangeByInclusive(naf.size() - 1, 0, -1)) {
-          let nafItem : Int = naf[i];
-          p := doDouble(p.0, p.1, p.2, curve.a, curve.p);
-          if (nafItem < 0) {
-            p := _add(
-              p.0,
-              p.1,
-              p.2,
-              x2.value,
-              y2neg,
-              1,
-              curve.a,
-              curve.p,
-            );
-          } else if (nafItem > 0) {
-            p := _add(p.0, p.1, p.2, x2.value, y2.value, 1, curve.a, curve.p);
-          };
-        };
-        if (p.1 == 0 or p.2 == 0) {
-          return #infinity(curve);
-        };
-        #point(curve.Fp(p.0), curve.Fp(p.1), curve.Fp(p.2), curve);
+        wnafSum(terms, curve);
       };
     };
   };
@@ -279,27 +270,33 @@ module {
     scalar : Nat,
     glv : Curves.Glv,
     curve : Curves.Curve,
-  ) : [WnafTerm] {
-    let (a, fp) = (curve.a, curve.p);
+  ) : ?[WnafTerm] {
+    let fp = curve.p;
+    let ?table1 = oddMultiples(x, y, curve) else return null;
+    // Their images under phi(X, Y, Z) = (beta * X, Y, Z).
+    let beta = glv.beta % fp;
+    let table2 = table1.map<Coords, Coords>(func(q) = (fmul(beta, q.0, fp), q.1, q.2));
+    ?splitTerms(scalar, table1, table2, WNAF_WINDOW, glv, curve);
+  };
 
-    // Odd multiples of P, and their images under
-    // phi(X, Y, Z) = (beta * X, Y, Z).
-    let tableSize = 2 ** (GLV_WINDOW - 2 : Nat);
-    let table1 = VarArray.repeat<Coords>((x, y, 1), tableSize);
+  // The odd multiples P, 3P, ..., (2^(WNAF_WINDOW - 1) - 1)P of the affine
+  // point P = (x, y), in Jacobian coordinates: one doubling and
+  // 2^(WNAF_WINDOW - 2) - 1 additions.
+  //
+  // Returns null if P, 2P or an entry is a point of order 2. Its Y is 0,
+  // which the formulas read as infinity, so the entries after it would be
+  // wrong. Only curves of even order have such points.
+  func oddMultiples(x : Nat, y : Nat, curve : Curves.Curve) : ?[Coords] {
+    let (a, fp) = (curve.a, curve.p);
+    let tableSize = 2 ** (WNAF_WINDOW - 2 : Nat);
+    let table = VarArray.repeat<Coords>((x, y, 1), tableSize);
     let twoP = doubleWithZ1(x, y, a, fp);
     for (i in Nat.range(1, tableSize)) {
-      let q = table1[i - 1];
-      table1[i] := _add(q.0, q.1, q.2, twoP.0, twoP.1, twoP.2, a, fp);
+      let q = table[i - 1];
+      table[i] := _add(q.0, q.1, q.2, twoP.0, twoP.1, twoP.2, a, fp);
     };
-    let beta = glv.beta % fp;
-    let table2 = Array.tabulate<Coords>(
-      tableSize,
-      func(i) {
-        let q = table1[i];
-        (fmul(beta, q.0, fp), q.1, q.2);
-      },
-    );
-    splitTerms(scalar, table1.toArray(), table2, GLV_WINDOW, glv, curve);
+    func orderTwo(q : Coords) : Bool = q.1 == 0 and q.2 != 0;
+    if (orderTwo(twoP) or table.any(orderTwo)) null else ?table.toArray();
   };
 
   // True if (x, y) is the generator of secp256k1, for which precomputed
@@ -335,19 +332,30 @@ module {
     );
   };
 
-  // The GLV terms of `scalar * P` for the affine point P = (x, y), using the
-  // precomputed tables if P is the secp256k1 generator.
-  func pointTerms(
-    x : Nat,
-    y : Nat,
-    scalar : Nat,
-    glv : Curves.Glv,
-    curve : Curves.Curve,
-  ) : [WnafTerm] {
-    if (isSecp256k1Generator(x, y, curve)) {
-      generatorTerms(scalar, glv, curve);
-    } else {
-      glvTerms(x, y, scalar, glv, curve);
+  // The wNAF terms of `scalar * P` for the affine point P = (x, y). On
+  // curves with GLV parameters these are the GLV terms, using the
+  // precomputed tables if P is the secp256k1 generator. On other curves it
+  // is one term with the full scalar against the odd multiples of P.
+  // Returns null if the table of odd multiples can't be built (see
+  // `oddMultiples`).
+  func pointTerms(x : Nat, y : Nat, scalar : Nat, curve : Curves.Curve) : ?[WnafTerm] {
+    switch (curve.glv) {
+      case (?glv) {
+        if (isSecp256k1Generator(x, y, curve)) {
+          ?generatorTerms(scalar, glv, curve);
+        } else {
+          glvTerms(x, y, scalar, glv, curve);
+        };
+      };
+      case null {
+        if (scalar == 0) return ?[];
+        let ?table = oddMultiples(x, y, curve) else return null;
+        ?[{
+          digits = Numbers.toWnaf(scalar, WNAF_WINDOW);
+          table;
+          negative = false;
+        }];
+      };
     };
   };
 
@@ -386,11 +394,12 @@ module {
 
   /// Computes `a * point1 + b * point2`.
   ///
-  /// Gives the same result as `add(mul(point1, a), mul(point2, b))`. On
-  /// curves with GLV parameters (secp256k1) it is faster, because both
-  /// multiplications share one doubling per bit of the half-length scalars,
-  /// and a point that is the secp256k1 generator uses precomputed tables.
-  /// This is the operation at the heart of ECDSA verification.
+  /// Gives the same result as `add(mul(point1, a), mul(point2, b))`, but
+  /// faster, because both multiplications share one doubling per digit. On
+  /// curves with GLV parameters (secp256k1) the scalars are split into
+  /// half-length pieces first, and a point that is the secp256k1 generator
+  /// uses precomputed tables. This is the operation at the heart of ECDSA
+  /// verification.
   ///
   /// Traps with `"Cannot add two points on different curves"` when
   /// `point1` and `point2` belong to different curves. Otherwise never
@@ -400,17 +409,17 @@ module {
     if (not Curves.isEqual(curve, getCurve(point2))) {
       Runtime.trap("Cannot add two points on different curves");
     };
-    let ?glv = curve.glv else return add(mul(point1, a), mul(point2, b));
 
-    func terms(point : Point, scalar : Nat) : [WnafTerm] {
+    func terms(point : Point, scalar : Nat) : ?[WnafTerm] {
       switch (scale(point)) {
-        case (#infinity(_)) [];
-        case (#point(x, y, _, _)) pointTerms(x.value, y.value, scalar, glv, curve);
+        case (#infinity(_)) ?[];
+        case (#point(x, y, _, _)) pointTerms(x.value, y.value, scalar, curve);
       };
     };
-    let terms1 = terms(point1, a);
-    let terms2 = terms(point2, b);
-    wnafSum(terms1.concat(terms2), curve);
+    switch (terms(point1, a), terms(point2, b)) {
+      case (?terms1, ?terms2) wnafSum(terms1.concat(terms2), curve);
+      case _ add(mul(point1, a), mul(point2, b));
+    };
   };
 
   /// Multiplies the curve generator by scalar `other`.

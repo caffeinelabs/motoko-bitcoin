@@ -25,6 +25,10 @@ module {
   /// Defines a curve `y^2 = x^3 + a*x + b` over `F_p` with subgroup
   /// order `r` and generator `(gx, gy)`. `Fp` is a convenience constructor
   /// for field elements modulo `p`.
+  ///
+  /// The number of points on the curve must be odd, as it is for secp256k1
+  /// and secp256r1 (both have prime order): `Jacobi` doesn't support points
+  /// of order 2 and can return wrong results on curves that have them.
   public type Curve = {
     p : Nat;
     // Order (number of points on the curve)

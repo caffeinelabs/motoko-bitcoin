@@ -24,6 +24,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** `Curves.Curve` has a new field `glv : ?Glv`. Code that
   constructs its own `Curve` values must add it (`glv = null` keeps the
   previous scalar multiplication).
+- **Breaking:** `Der.decodeSignature()` rejects non-strict DER (negative or
+  non-minimal integers), as Bitcoin does since BIP66.
+
+### Fixed
+
+- Document that `Jacobi` doesn't support curves with an even number of
+  points: on them, its arithmetic can return wrong points.
+- Document that `Ecdsa.verify()` accepts high-S signatures, which Bitcoin's
+  standardness rules and libsecp256k1 reject.
 
 ## [0.2.2] - 2026-10-16
 
