@@ -31,6 +31,12 @@ module {
   /// Returns `true` only when the signature is valid for `message` under
   /// `publicKey`. The `publicKey` is assumed to have been validated by
   /// `Publickey.decode` (on-curve, not at infinity).
+  ///
+  /// Accepts both `s` and `curve.r - s`: ECDSA signatures are malleable, and
+  /// this function doesn't enforce the low-S form of Bitcoin's standardness
+  /// rules (BIP 62, BIP 146). Callers that need non-malleable signatures, as
+  /// libsecp256k1's `secp256k1_ecdsa_verify` requires, must also reject
+  /// `signature.s > curve.r / 2`.
   public func verify(
     signature : Signature,
     publicKey : PublicKey,
