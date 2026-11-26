@@ -13,20 +13,16 @@ module {
   // The field prime of secp256k1, 2^256 - 2^32 - 977, for which `mul` folds
   // instead of dividing.
   let SECP256K1_P : Nat = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f;
-  // 2^256 - p = 2^32 + 977
-  let SECP256K1_C : Nat = 0x1000003d1;
   let TWO_POW_512 : Nat = 0x100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;
 
   // Reduces t < 2^512 modulo SECP256K1_P by folding the bits above 2^256
-  // back in, using 2^256 = 2^32 + 977 (mod p): two folds bring t below
-  // 2^256 + 2^67 < 2p.
+  // back in. With hi = t >> 256 and lo = t - hi * 2^256, the fold
+  // lo + hi * (2^256 - p) equals t - hi * p, which takes one multiplication
+  // and one subtraction instead of a shift, a subtraction, a multiplication
+  // and an addition. Two folds bring t below 2^256 + 2^67 < 2p.
   func reduceSecp256k1(t : Nat) : Nat {
-    let tHi = Nat.bitshiftRight(t, 256);
-    let tLo : Nat = t - Nat.bitshiftLeft(tHi, 256);
-    let u = tLo + tHi * SECP256K1_C;
-    let uHi = Nat.bitshiftRight(u, 256);
-    let uLo : Nat = u - Nat.bitshiftLeft(uHi, 256);
-    let v = uLo + uHi * SECP256K1_C;
+    let u : Nat = t - Nat.bitshiftRight(t, 256) * SECP256K1_P;
+    let v : Nat = u - Nat.bitshiftRight(u, 256) * SECP256K1_P;
     if (v >= SECP256K1_P) v - SECP256K1_P else v;
   };
 
