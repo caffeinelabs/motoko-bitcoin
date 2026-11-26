@@ -41,20 +41,21 @@ module {
   // Internal Jacobian coordinates: canonical residues in [0, p). A point
   // with Y = 0 or Z = 0 is the point at infinity.
   type Coords = (Nat, Nat, Nat);
+  type Modulus = Field.Modulus;
 
   // Window width of the wNAF digits in scalar multiplication, for the GLV
   // halves on curves with an endomorphism and for full scalars on others.
   let WNAF_WINDOW : Nat = 5;
 
   // Field.mul folds instead of dividing for the secp256k1 prime.
-  func fmul(a : Nat, b : Nat, p : Nat) : Nat = Field.mul(a, b, p);
-  func fsqr(a : Nat, p : Nat) : Nat = Field.mul(a, a, p);
-  func fadd(a : Nat, b : Nat, p : Nat) : Nat {
+  func fmul(a : Nat, b : Nat, m : Modulus) : Nat = Field.mulMod(a, b, m);
+  func fsqr(a : Nat, m : Modulus) : Nat = Field.mulMod(a, a, m);
+  func fadd(a : Nat, b : Nat, m : Modulus) : Nat {
     let s = a + b;
-    if (s >= p) s - p else s;
+    if (s >= m.0) s - m.0 else s;
   };
-  func fsub(a : Nat, b : Nat, p : Nat) : Nat = if (a >= b) a - b else a + p - b;
-  func fdbl(a : Nat, p : Nat) : Nat = fadd(a, a, p);
+  func fsub(a : Nat, b : Nat, m : Modulus) : Nat = if (a >= b) a - b else a + m.0 - b;
+  func fdbl(a : Nat, m : Modulus) : Nat = fadd(a, a, m);
 
   /// Jacobian point representation. The arithmetic treats a `#point` with
   /// y = 0 as infinity (see the module description).
@@ -178,7 +179,7 @@ module {
     switch (normalizeInfinity(point)) {
       case (#infinity(curve)) #infinity(curve);
       case (#point(x, y, z, curve)) {
-        let (x2, y2, z2) = doDouble(x.value, y.value, z.value, curve.a, curve.p);
+        let (x2, y2, z2) = doDouble(x.value, y.value, z.value, curve.a, Field.modulus(curve.p));
         #point(curve.Fp(x2), curve.Fp(y2), curve.Fp(z2), curve);
       };
     };
@@ -271,11 +272,11 @@ module {
     glv : Curves.Glv,
     curve : Curves.Curve,
   ) : ?[WnafTerm] {
-    let fp = curve.p;
+    let m = Field.modulus(curve.p);
     let ?table1 = oddMultiples(x, y, curve) else return null;
     // Their images under phi(X, Y, Z) = (beta * X, Y, Z).
-    let beta = glv.beta % fp;
-    let table2 = table1.map<Coords, Coords>(func(q) = (fmul(beta, q.0, fp), q.1, q.2));
+    let beta = glv.beta % m.0;
+    let table2 = table1.map<Coords, Coords>(func(q) = (fmul(beta, q.0, m), q.1, q.2));
     ?splitTerms(scalar, table1, table2, WNAF_WINDOW, glv, curve);
   };
 
@@ -287,13 +288,13 @@ module {
   // which the formulas read as infinity, so the entries after it would be
   // wrong. Only curves of even order have such points.
   func oddMultiples(x : Nat, y : Nat, curve : Curves.Curve) : ?[Coords] {
-    let (a, fp) = (curve.a, curve.p);
+    let (a, m) = (curve.a, Field.modulus(curve.p));
     let tableSize = 2 ** (WNAF_WINDOW - 2 : Nat);
     let table = VarArray.repeat<Coords>((x, y, 1), tableSize);
-    let twoP = doubleWithZ1(x, y, a, fp);
+    let twoP = doubleWithZ1(x, y, a, m);
     for (i in Nat.range(1, tableSize)) {
       let q = table[i - 1];
-      table[i] := _add(q.0, q.1, q.2, twoP.0, twoP.1, twoP.2, a, fp);
+      table[i] := _add(q.0, q.1, q.2, twoP.0, twoP.1, twoP.2, a, m);
     };
     func orderTwo(q : Coords) : Bool = q.1 == 0 and q.2 != 0;
     if (orderTwo(twoP) or table.any(orderTwo)) null else ?table.toArray();
@@ -363,7 +364,7 @@ module {
   // wNAF loop: the terms share one doubling per digit position, and each
   // non-zero digit adds one table entry.
   func wnafSum(terms : [WnafTerm], curve : Curves.Curve) : Point {
-    let (a, fp) = (curve.a, curve.p);
+    let (a, m) = (curve.a, Field.modulus(curve.p));
     var len = 0;
     for (term in terms.values()) {
       if (term.digits.size() > len) len := term.digits.size();
@@ -374,14 +375,14 @@ module {
 
     var acc : Coords = (0, 0, 1);
     for (i in Nat.rangeByInclusive(len - 1, 0, -1)) {
-      acc := doDouble(acc.0, acc.1, acc.2, a, fp);
+      acc := doDouble(acc.0, acc.1, acc.2, a, m);
       for (term in terms.values()) {
         if (i < term.digits.size()) {
           let d = term.digits[i];
           if (d != 0) {
             let q = term.table[Int.abs(d) / 2];
-            let qy = if ((d < 0) != term.negative) fsub(0, q.1, fp) else q.1;
-            acc := _add(acc.0, acc.1, acc.2, q.0, qy, q.2, a, fp);
+            let qy = if ((d < 0) != term.negative) fsub(0, q.1, m) else q.1;
+            acc := _add(acc.0, acc.1, acc.2, q.0, qy, q.2, a, m);
           };
         };
       };
@@ -450,7 +451,7 @@ module {
           Y2.value,
           Z2.value,
           curve.a,
-          curve.p,
+          Field.modulus(curve.p),
         );
         if (Y3 == 0 or Z3 == 0) {
           #infinity(curve);
@@ -461,46 +462,46 @@ module {
     };
   };
 
-  func doDouble(X1 : Nat, Y1 : Nat, Z1 : Nat, a : Nat, p : Nat) : Coords {
+  func doDouble(X1 : Nat, Y1 : Nat, Z1 : Nat, a : Nat, m : Modulus) : Coords {
     if (Z1 == 1) {
-      return doubleWithZ1(X1, Y1, a, p);
+      return doubleWithZ1(X1, Y1, a, m);
     };
     if (Y1 == 0 or Z1 == 0) {
       return (0, 0, 0);
     };
 
-    let XX = fsqr(X1, p);
-    let YY = fsqr(Y1, p);
-    let YYYY = fsqr(YY, p);
+    let XX = fsqr(X1, m);
+    let YY = fsqr(Y1, m);
+    let YYYY = fsqr(YY, m);
     // S = 4 * X1 * YY
-    let S = fdbl(fdbl(fmul(X1, YY, p), p), p);
+    let S = fdbl(fdbl(fmul(X1, YY, m), m), m);
     // M = 3 * XX + a * Z1^4; for a = 0 (secp256k1) Z1^2 isn't needed.
-    var M = fadd(fdbl(XX, p), XX, p);
+    var M = fadd(fdbl(XX, m), XX, m);
     if (a != 0) {
-      M := fadd(M, fmul(a, fsqr(fsqr(Z1, p), p), p), p);
+      M := fadd(M, fmul(a, fsqr(fsqr(Z1, m), m), m), m);
     };
-    let T = fsub(fsqr(M, p), fdbl(S, p), p);
+    let T = fsub(fsqr(M, m), fdbl(S, m), m);
     // Y3 = M * (S - T) - 8 * YYYY
-    let Y3 = fsub(fmul(M, fsub(S, T, p), p), fdbl(fdbl(fdbl(YYYY, p), p), p), p);
+    let Y3 = fsub(fmul(M, fsub(S, T, m), m), fdbl(fdbl(fdbl(YYYY, m), m), m), m);
     // Z3 = 2 * Y1 * Z1
-    let Z3 = fdbl(fmul(Y1, Z1, p), p);
+    let Z3 = fdbl(fmul(Y1, Z1, m), m);
 
     (T, Y3, Z3);
   };
 
-  func doubleWithZ1(X1 : Nat, Y1 : Nat, a : Nat, p : Nat) : Coords {
+  func doubleWithZ1(X1 : Nat, Y1 : Nat, a : Nat, m : Modulus) : Coords {
     if (Y1 == 0) {
       return (0, 0, 0);
     };
 
-    let XX = fsqr(X1, p);
-    let YY = fsqr(Y1, p);
-    let YYYY = fsqr(YY, p);
-    let S = fdbl(fdbl(fmul(X1, YY, p), p), p);
-    let M = fadd(fadd(fdbl(XX, p), XX, p), a, p);
-    let T = fsub(fsqr(M, p), fdbl(S, p), p);
-    let Y3 = fsub(fmul(M, fsub(S, T, p), p), fdbl(fdbl(fdbl(YYYY, p), p), p), p);
-    let Z3 = fdbl(Y1, p);
+    let XX = fsqr(X1, m);
+    let YY = fsqr(Y1, m);
+    let YYYY = fsqr(YY, m);
+    let S = fdbl(fdbl(fmul(X1, YY, m), m), m);
+    let M = fadd(fadd(fdbl(XX, m), XX, m), a, m);
+    let T = fsub(fsqr(M, m), fdbl(S, m), m);
+    let Y3 = fsub(fmul(M, fsub(S, T, m), m), fdbl(fdbl(fdbl(YYYY, m), m), m), m);
+    let Z3 = fdbl(Y1, m);
     (T, Y3, Z3);
   };
 
@@ -511,23 +512,23 @@ module {
     X2 : Nat,
     Y2 : Nat,
     a : Nat,
-    p : Nat,
+    m : Modulus,
   ) : Coords {
-    let dX = fsub(X2, X1, p);
-    let dY = fsub(Y2, Y1, p);
-    let A = fsqr(dX, p);
-    let B = fmul(X1, A, p);
-    let C = fmul(X2, A, p);
-    let D = fsqr(dY, p);
+    let dX = fsub(X2, X1, m);
+    let dY = fsub(Y2, Y1, m);
+    let A = fsqr(dX, m);
+    let B = fmul(X1, A, m);
+    let C = fmul(X2, A, m);
+    let D = fsqr(dY, m);
 
     if (A == 0 and D == 0) {
-      return doDouble(X1, Y1, Z1, a, p);
+      return doDouble(X1, Y1, Z1, a, m);
     };
 
-    let X3 = fsub(fsub(D, B, p), C, p);
+    let X3 = fsub(fsub(D, B, m), C, m);
     // Y3 = dY * (B - X3) - Y1 * (C - B)
-    let Y3 = fsub(fmul(dY, fsub(B, X3, p), p), fmul(Y1, fsub(C, B, p), p), p);
-    let Z3 = fmul(Z1, dX, p);
+    let Y3 = fsub(fmul(dY, fsub(B, X3, m), m), fmul(Y1, fsub(C, B, m), m), m);
+    let Z3 = fmul(Z1, dX, m);
 
     (X3, Y3, Z3);
   };
@@ -538,22 +539,22 @@ module {
     X2 : Nat,
     Y2 : Nat,
     a : Nat,
-    p : Nat,
+    m : Modulus,
   ) : Coords {
-    let H = fsub(X2, X1, p);
-    let r = fdbl(fsub(Y2, Y1, p), p);
+    let H = fsub(X2, X1, m);
+    let r = fdbl(fsub(Y2, Y1, m), m);
 
     if (H == 0 and r == 0) {
-      return doubleWithZ1(X1, Y1, a, p);
+      return doubleWithZ1(X1, Y1, a, m);
     };
 
-    let I = fdbl(fdbl(fsqr(H, p), p), p);
-    let J = fmul(H, I, p);
-    let V = fmul(X1, I, p);
-    let X3 = fsub(fsub(fsqr(r, p), J, p), fdbl(V, p), p);
+    let I = fdbl(fdbl(fsqr(H, m), m), m);
+    let J = fmul(H, I, m);
+    let V = fmul(X1, I, m);
+    let X3 = fsub(fsub(fsqr(r, m), J, m), fdbl(V, m), m);
     // Y3 = r * (V - X3) - 2 * Y1 * J
-    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fdbl(fmul(Y1, J, p), p), p);
-    let Z3 = fdbl(H, p);
+    let Y3 = fsub(fmul(r, fsub(V, X3, m), m), fdbl(fmul(Y1, J, m), m), m);
+    let Z3 = fdbl(H, m);
 
     (X3, Y3, Z3);
   };
@@ -567,26 +568,26 @@ module {
     X2 : Nat,
     Y2 : Nat,
     a : Nat,
-    p : Nat,
+    m : Modulus,
   ) : Coords {
-    let Z1Z1 = fsqr(Z1, p);
-    let U2 = fmul(X2, Z1Z1, p);
-    let S2 = fmul(Y2, fmul(Z1, Z1Z1, p), p);
-    let H = fsub(U2, X1, p);
-    let r = fsub(S2, Y1, p);
+    let Z1Z1 = fsqr(Z1, m);
+    let U2 = fmul(X2, Z1Z1, m);
+    let S2 = fmul(Y2, fmul(Z1, Z1Z1, m), m);
+    let H = fsub(U2, X1, m);
+    let r = fsub(S2, Y1, m);
 
     if (H == 0) {
-      return if (r == 0) doubleWithZ1(X2, Y2, a, p) else (0, 0, 0);
+      return if (r == 0) doubleWithZ1(X2, Y2, a, m) else (0, 0, 0);
     };
 
-    let HH = fsqr(H, p);
-    let HHH = fmul(H, HH, p);
-    let V = fmul(X1, HH, p);
+    let HH = fsqr(H, m);
+    let HHH = fmul(H, HH, m);
+    let V = fmul(X1, HH, m);
     // X3 = r^2 - H^3 - 2 * V
-    let X3 = fsub(fsub(fsub(fsqr(r, p), HHH, p), V, p), V, p);
+    let X3 = fsub(fsub(fsub(fsqr(r, m), HHH, m), V, m), V, m);
     // Y3 = r * (V - X3) - Y1 * H^3
-    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fmul(Y1, HHH, p), p);
-    let Z3 = fmul(Z1, H, p);
+    let Y3 = fsub(fmul(r, fsub(V, X3, m), m), fmul(Y1, HHH, m), m);
+    let Z3 = fmul(Z1, H, m);
 
     (X3, Y3, Z3);
   };
@@ -601,27 +602,27 @@ module {
     Y2 : Nat,
     Z2 : Nat,
     a : Nat,
-    p : Nat,
+    m : Modulus,
   ) : Coords {
-    let Z1Z1 = fsqr(Z1, p);
-    let Z2Z2 = fsqr(Z2, p);
-    let U1 = fmul(X1, Z2Z2, p);
-    let U2 = fmul(X2, Z1Z1, p);
-    let S1 = fmul(Y1, fmul(Z2, Z2Z2, p), p);
-    let S2 = fmul(Y2, fmul(Z1, Z1Z1, p), p);
-    let H = fsub(U2, U1, p);
-    let r = fsub(S2, S1, p);
+    let Z1Z1 = fsqr(Z1, m);
+    let Z2Z2 = fsqr(Z2, m);
+    let U1 = fmul(X1, Z2Z2, m);
+    let U2 = fmul(X2, Z1Z1, m);
+    let S1 = fmul(Y1, fmul(Z2, Z2Z2, m), m);
+    let S2 = fmul(Y2, fmul(Z1, Z1Z1, m), m);
+    let H = fsub(U2, U1, m);
+    let r = fsub(S2, S1, m);
 
     if (H == 0) {
-      return if (r == 0) doDouble(X1, Y1, Z1, a, p) else (0, 0, 0);
+      return if (r == 0) doDouble(X1, Y1, Z1, a, m) else (0, 0, 0);
     };
 
-    let HH = fsqr(H, p);
-    let HHH = fmul(H, HH, p);
-    let V = fmul(U1, HH, p);
-    let X3 = fsub(fsub(fsub(fsqr(r, p), HHH, p), V, p), V, p);
-    let Y3 = fsub(fmul(r, fsub(V, X3, p), p), fmul(S1, HHH, p), p);
-    let Z3 = fmul(fmul(Z1, Z2, p), H, p);
+    let HH = fsqr(H, m);
+    let HHH = fmul(H, HH, m);
+    let V = fmul(U1, HH, m);
+    let X3 = fsub(fsub(fsub(fsqr(r, m), HHH, m), V, m), V, m);
+    let Y3 = fsub(fmul(r, fsub(V, X3, m), m), fmul(S1, HHH, m), m);
+    let Z3 = fmul(fmul(Z1, Z2, m), H, m);
 
     (X3, Y3, Z3);
   };
@@ -634,7 +635,7 @@ module {
     Y2 : Nat,
     Z2 : Nat,
     a : Nat,
-    p : Nat,
+    m : Modulus,
   ) : Coords {
 
     if (Y1 == 0 or Z1 == 0) {
@@ -647,20 +648,20 @@ module {
 
     if (Z1 == Z2) {
       if (Z1 == 1) {
-        return addWithZ1(X1, Y1, X2, Y2, a, p);
+        return addWithZ1(X1, Y1, X2, Y2, a, m);
       };
-      return addWithEqZ(X1, Y1, Z1, X2, Y2, a, p);
+      return addWithEqZ(X1, Y1, Z1, X2, Y2, a, m);
     };
 
     if (Z1 == 1) {
-      return addWithZ2Eq1(X2, Y2, Z2, X1, Y1, a, p);
+      return addWithZ2Eq1(X2, Y2, Z2, X1, Y1, a, m);
     };
 
     if (Z2 == 1) {
-      return addWithZ2Eq1(X1, Y1, Z1, X2, Y2, a, p);
+      return addWithZ2Eq1(X1, Y1, Z1, X2, Y2, a, m);
     };
 
-    return addWithArbitraryZ(X1, Y1, Z1, X2, Y2, Z2, a, p);
+    return addWithArbitraryZ(X1, Y1, Z1, X2, Y2, Z2, a, m);
   };
 
   // Normalizes infinity point of the form #point (_, _, 0, _) to #infinity.

@@ -7,10 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Add `Field.modulus()` and `Field.mulMod()`, modular multiplication with
+  Barrett reduction.
+
 ### Changed
 
 - Speed up RIPEMD-160 (`Ripemd160.hash()` and `Digest`): 34–51% fewer
   instructions, about 50% fewer for 1 KiB inputs.
+- Speed up elliptic-curve operations on curves other than secp256k1, such as
+  secp256r1, with Barrett reduction (ECDSA verification −28.7%).
 
 ## [0.3.0] - 2026-11-26
 
