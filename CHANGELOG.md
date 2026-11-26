@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Speed up elliptic-curve operations on secp256k1: ECDSA verification takes
   76% fewer instructions than in 0.2.2 and BIP32 derivation 77% fewer (see
   [`bench/OPTIMIZATIONS.md`](https://github.com/caffeinelabs/motoko-bitcoin/blob/main/bench/OPTIMIZATIONS.md)).
-- Update `core` from `2.6.2` to `2.7.0`.
-- Update `sha2` from `0.3.0` to `0.3.3`.
+- Update `core` from `2.6.2` to `2.7.1`.
+- Update `sha2` from `0.3.0` to `0.3.4`.
 - **Breaking:** `Curves.Curve` has a new field `glv : ?Glv`. Code that
   constructs its own `Curve` values must add it (`glv = null` keeps the
   previous scalar multiplication).
