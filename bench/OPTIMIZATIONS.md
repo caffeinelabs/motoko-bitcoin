@@ -40,25 +40,27 @@ the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
 | Fold as t − hi·p                       |   50_168_009 | −15.9% |    3.39 MiB | −33.7% |   142_258_775 | −15.4% |     13_603_499 | −13.6% |
 | wNAF for curves without GLV            |   50_175_402 |     0% |    3.39 MiB |     0% |   142_258_830 |     0% |     13_603_510 |     0% |
 | moc 2.2.5, sha2 0.3.4, core 2.7.1      |   50_175_079 |     0% |    3.39 MiB |     0% |   142_252_190 |     0% |     13_603_510 |     0% |
+| Barrett reduction for other primes     |   50_204_479 |  +0.1% |    3.39 MiB |     0% |   142_341_298 |  +0.1% |     13_611_298 |  +0.1% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
 above):
 
-| Step                              | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |      Δ |   `mulAdd` |      Δ |
-| :-------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | -----: | ---------: | -----: |
-| Precomputed tables for G          | 24_419_901 |        | 56_959_886 |        | 59_227_618 |        | 73_905_529 |        |
-| Square root by addition chain     |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 |  −0.1% | 73_853_875 |  −0.1% |
-| G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 |  −0.3% | 73_652_493 |  −0.3% |
-| Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 |  −7.0% | 69_493_523 |  −5.6% |
-| Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 |  +0.7% | 69_657_567 |  +0.2% |
-| Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 |  +0.4% | 69_958_715 |  +0.4% |
-| wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 |  −8.8% | 62_263_255 | −11.0% |
-| Leaner addition formulas          |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 |  −1.3% | 61_152_465 |  −1.8% |
-| moc 2.2.3                         |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 |  +0.7% | 61_574_396 |  +0.7% |
-| Fold as t − hi·p                  |  5_608_775 | −18.4% | 22_187_390 | −14.8% | 42_718_644 | −15.0% | 52_144_098 | −15.3% |
-| wNAF for curves without GLV       |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
-| moc 2.2.5, sha2 0.3.4, core 2.7.1 |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
+| Step                               | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |      Δ |   `mulAdd` |      Δ |
+| :--------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | -----: | ---------: | -----: |
+| Precomputed tables for G           | 24_419_901 |        | 56_959_886 |        | 59_227_618 |        | 73_905_529 |        |
+| Square root by addition chain      |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 |  −0.1% | 73_853_875 |  −0.1% |
+| G tables in `mul` and `mulBase`    |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 |  −0.3% | 73_652_493 |  −0.3% |
+| Doubling formula for a = 0         |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 |  −7.0% | 69_493_523 |  −5.6% |
+| Split G's scalar at 2⁶⁴ (width 6)  |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 |  +0.7% | 69_657_567 |  +0.2% |
+| Keep the field helpers private     |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 |  +0.4% | 69_958_715 |  +0.4% |
+| wNAF recoding on `Nat64` words     |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 |  −8.8% | 62_263_255 | −11.0% |
+| Leaner addition formulas           |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 |  −1.3% | 61_152_465 |  −1.8% |
+| moc 2.2.3                          |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 |  +0.7% | 61_574_396 |  +0.7% |
+| Fold as t − hi·p                   |  5_608_775 | −18.4% | 22_187_390 | −14.8% | 42_718_644 | −15.0% | 52_144_098 | −15.3% |
+| wNAF for curves without GLV        |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
+| moc 2.2.5, sha2 0.3.4, core 2.7.1  |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
+| Barrett reduction for other primes |  5_613_450 |  +0.1% | 22_200_246 |  +0.1% | 42_750_784 |  +0.1% | 52_180_855 |  +0.1% |
 
 Columns:
 
@@ -385,6 +387,20 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
     dependencies changes no benchmark by more than 0.01%. On secp256r1,
     verify measures 141_771_116 instructions, against 252_959_189 in 0.2.2
     (−44.0%).
+
+24. **Barrett reduction for other primes.** Field multiplications for any
+    prime other than secp256k1's reduced the product with `% p`, a bignum
+    division. They now use Barrett reduction (`Field.mulMod`): two
+    multiplications by precomputed constants, two shifts and at most two
+    subtractions. `Field.modulus(p)` computes the constants once per
+    operation (about one division) and `Jacobi` passes them down. They are
+    a tuple because a record's fields are looked up by hash at runtime: as
+    a record, secp256k1 lost 0.3%, as a tuple 0.05%. `Field.pow` uses it
+    too. On secp256r1: verify 141_771_116 → 101_067_334 instructions
+    (−28.7%); `mulAdd` −28.3%, `mul` −28.0%, `mulBase` −28.4%,
+    decompression −17.6%. Heap changes by less than 1%: the temporaries of
+    Barrett reduction take about as much as the division's. secp256k1
+    doesn't change (+0.06%).
 
 ## Tried and not adopted
 
