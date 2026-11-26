@@ -16,7 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Speed up elliptic-curve operations: ~5x on secp256k1, ~2x on secp256r1
+- Speed up elliptic-curve operations: ~5x on secp256k1, ~2x on secp256r1.
+- Require moc 1.6.0 or later, which `core` 2.7.1 already requires.
 - Update `core` from `2.6.2` to `2.7.1`.
 - Update `sha2` from `0.3.0` to `0.3.4`.
 - **Breaking:** `Curves.Curve` has a new field `glv : ?Glv`. Code that

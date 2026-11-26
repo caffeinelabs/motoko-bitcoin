@@ -21,6 +21,6 @@ wasmtime = "51.0.0"
 wasm-opt = "133"
 
 [requirements]
-moc = "1.4.0"
+moc = "1.6.0"
 
 [optimize]
