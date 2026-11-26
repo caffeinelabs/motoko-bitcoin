@@ -9,9 +9,13 @@ import Hex "../Hex";
 import Jacobi "../../src/ec/Jacobi";
 import Numbers "../../src/ec/Numbers";
 import Secp256k1Generator "../../src/ec/Secp256k1Generator";
+import Fp "../../src/ec/Fp";
 import Secp256k1TestVectors "Secp256k1TestVectors";
+import Secp256r1 "Secp256r1";
 import TestUtils "../TestUtils";
 import WycheproofEcdhTestVectors "wycheproofEcdhTestVectors";
+
+import { test } "mo:test";
 
 type DoublingVector = Secp256k1TestVectors.DoublingVector;
 type MultiplicationVector = Secp256k1TestVectors.MultiplicationVector;
@@ -285,3 +289,123 @@ do {
     expectedH := Jacobi.add(expectedH, twoH);
   };
 };
+
+// Curves without GLV parameters use the same wNAF loop with one term per
+// scalar. Check `mul` and `mulAdd` against double-and-add with
+// Jacobi.double and Jacobi.add on secp256r1, on secp256k1 with its GLV
+// parameters removed, and exhaustively on small curves, where table
+// entries and sums hit the point at infinity.
+do {
+  func reference(point : Jacobi.Point, k : Nat, curve : Curves.Curve) : Jacobi.Point {
+    var acc : Jacobi.Point = #infinity(curve);
+    for (bit in Numbers.toBinary(k).values()) {
+      acc := Jacobi.double(acc);
+      if (bit) acc := Jacobi.add(acc, point);
+    };
+    acc;
+  };
+
+  func check(curve : Curves.Curve, q : Jacobi.Point, scalars : [Nat], pairs : [Nat]) {
+    let g = Jacobi.base(curve);
+    let gk = scalars.map<Nat, Jacobi.Point>(func(k) = reference(g, k, curve));
+    let ql = pairs.map<Nat, Jacobi.Point>(func(l) = reference(q, l, curve));
+    for (i in scalars.keys()) {
+      let k = scalars[i];
+      assert (Jacobi.isEqual(Jacobi.mul(g, k), gk[i]));
+      assert (Jacobi.isEqual(Jacobi.mulBase(k, curve), gk[i]));
+      assert (Jacobi.isEqual(Jacobi.mul(q, k), reference(q, k, curve)));
+      for (j in pairs.keys()) {
+        let l = pairs[j];
+        assert (Jacobi.isEqual(Jacobi.mulAdd(g, k, q, l), Jacobi.add(gk[i], ql[j])));
+        assert (Jacobi.isEqual(Jacobi.mulAdd(g, k, g, l), reference(g, k + l, curve)));
+      };
+    };
+  };
+
+  for (curve in [Secp256r1.curve, { Curves.secp256k1 with glv = null }].values()) {
+    let r = curve.r;
+    let q = Jacobi.mul(Jacobi.base(curve), 0xc6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5);
+    check(
+      curve,
+      q,
+      [0, 1, 17, 0x4b688df40bcedbe641ddb16ff0a1842d9c67ea1c3bf63f3e0471baa664531d1a, r - 1, r + 1],
+      [0, 17, r - 1],
+    );
+    // A sum that cancels, and points at infinity.
+    let g = Jacobi.base(curve);
+    let inf : Jacobi.Point = #infinity(curve);
+    assert (Jacobi.isInfinity(Jacobi.mulAdd(g, 5, g, r - 5)));
+    assert (Jacobi.isInfinity(Jacobi.mulAdd(g, 5, Jacobi.neg(g), 5)));
+    assert (Jacobi.isEqual(Jacobi.mulAdd(inf, 5, g, 7), reference(g, 7, curve)));
+  };
+
+  // Small curves of prime order, so every point but infinity has Y != 0
+  // (the internal coordinates read Y = 0 as infinity, which only points of
+  // order 2 have). With order 5, the table entry 5P is infinity; scalars up
+  // to 19 cover multiples of the order and sums that cancel.
+  // y^2 = x^3 + x + 1 over F_7: order 5, a != 0.
+  // y^2 = x^3 + 3 over F_7: order 13, a = 0.
+  let toys : [(Nat, Nat, Nat, Nat, [(Nat, Nat)])] = [
+    (7, 1, 1, 5, [(0, 1), (0, 6), (2, 2), (2, 5)]),
+    (7, 0, 3, 13, [(1, 2), (1, 5), (2, 2), (2, 5)]),
+  ];
+  let scalars = Array.tabulate<Nat>(20, func(i) = i);
+  for ((p, a, b, n, points) in toys.values()) {
+    let toy : Curves.Curve = {
+      p;
+      r = n;
+      a;
+      b;
+      gx = points[0].0;
+      gy = points[0].1;
+      Fp = func(value : Nat) : Fp.Fp = Fp.Fp(value, p);
+      glv = null;
+    };
+    for ((x, y) in points.values()) {
+      check(toy, Jacobi.fromNat(x, y, 1, toy), scalars, scalars);
+    };
+  };
+};
+
+// y^2 = x^3 + 1 over F_5 has order 6: P = (2, 2) generates it and
+// 3P = (4, 0) has order 2, with Y = 0, which the internal coordinates read
+// as infinity. A table of odd multiples of P would contain 3P, so P must
+// take the NAF path that adds only P. Results that are 3P can't be
+// represented and are left out.
+test(
+  "Scalar multiplication on a curve with a point of order 2",
+  func() {
+    let curve : Curves.Curve = {
+      p = 5;
+      r = 6;
+      a = 0;
+      b = 1;
+      gx = 2;
+      gy = 2;
+      Fp = func(value : Nat) : Fp.Fp = Fp.Fp(value, 5);
+      glv = null;
+    };
+    let point = Jacobi.fromNat(2, 2, 1, curve);
+    // k * P for k mod 6 = 0, 1, 2, 4, 5.
+    func multiple(k : Nat) : Jacobi.Point = switch (k % 6) {
+      case 1 point;
+      case 2 Jacobi.fromNat(0, 4, 1, curve);
+      case 4 Jacobi.fromNat(0, 1, 1, curve);
+      case 5 Jacobi.fromNat(2, 3, 1, curve);
+      case _ #infinity(curve);
+    };
+    for (k in Nat.range(0, 24)) {
+      if (k % 6 != 3) {
+        assert Jacobi.isEqual(Jacobi.mul(point, k), multiple(k));
+        assert Jacobi.isEqual(Jacobi.mulBase(k, curve), multiple(k));
+      };
+    };
+    for (a in Nat.range(0, 12)) {
+      for (b in Nat.range(0, 12)) {
+        if (a % 6 != 3 and b % 6 != 3 and (a + b) % 6 != 3) {
+          assert Jacobi.isEqual(Jacobi.mulAdd(point, a, point, b), multiple(a + b));
+        };
+      };
+    };
+  },
+);
