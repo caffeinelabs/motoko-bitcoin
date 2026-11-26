@@ -181,7 +181,7 @@ Compared with 0.2.2, version 0.3.0 verifies an ECDSA signature on secp256k1
 in 50.2M instructions instead of 246.3M (4.9 times faster) and derives a BIP32
 path of depth 5 in 142.3M instead of 737.2M (5.2 times faster). On secp256r1,
 verification takes 141.8M instead of 253.0M (1.8 times faster).
-[`bench/OPTIMIZATIONS.md`](bench/OPTIMIZATIONS.md) lists what each
+[`bench/OPTIMIZATIONS.md`](https://github.com/caffeinelabs/motoko-bitcoin/blob/main/bench/OPTIMIZATIONS.md) lists what each
 optimization delivered.
 
 ## Development
@@ -205,4 +205,4 @@ To release a new version:
    package to [Mops](https://mops.one/bitcoin).
 
 For details, including how to publish an existing tag again, see
-[`RELEASING.md`](RELEASING.md).
+[`RELEASING.md`](https://github.com/caffeinelabs/motoko-bitcoin/blob/main/RELEASING.md).
