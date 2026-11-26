@@ -5,77 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-26
 
 ### Added
 
-- Add `Numbers.toWnaf()`, which computes width-`w` NAF digits.
 - Add `Jacobi.mulAdd()`, which computes `a * P1 + b * P2` faster than two
   separate multiplications.
-- Add `Secp256k1Generator`, the precomputed multiples of the secp256k1
-  generator used by `Jacobi`. It is internal to the package and not a stable
-  API.
-
-### Changed
-
-- Speed up `Jacobi` point arithmetic on secp256k1. See
-  [`bench/OPTIMIZATIONS.md`](https://github.com/caffeinelabs/motoko-bitcoin/blob/main/bench/OPTIMIZATIONS.md)
-  for what each step delivered.
-  - A modular reduction specialized to the secp256k1 prime (verify −12.9%).
-  - Field arithmetic on canonical `Nat` residues instead of signed `Int`
-    values (verify −8.0%, verify heap −9.4%).
-  - Width-5 wNAF digits with tables of odd multiples in the GLV
-    multiplication (verify −8.1%, verify heap −8.3%).
-  - ECDSA verification computes `u1 * G + u2 * Q` with one combined
-    multiplication (verify −25.1%, verify heap −26.6%).
-  - `Field.inverse()` uses an iterative extended Euclidean algorithm with one
-    division per step (one inversion −22%, verify −1.6%).
-  - ECDSA verification compares the result in Jacobian coordinates and no
-    longer converts it to affine coordinates, on curves whose order n and
-    field prime p satisfy n < p < 2n, such as secp256k1 (verify −2.7%).
-    Other curves keep the affine check.
-  - Precomputed tables of the secp256k1 generator for the `G` half of
-    verification (verify −13.0%, verify heap −13.7%; Wasm +21 KB).
-  - `Field.mul()` reduces modulo the secp256k1 prime without a bignum
-    division, and `Fp.sqrt()` uses an addition chain on secp256k1 (public key
-    decompression −72%, BIP32 derivation −21.6%).
-  - `Jacobi.mul()` and `Jacobi.mulBase()` use the precomputed generator
-    tables (`mulBase` −19.8%, BIP32 derivation −17.4%).
-  - A cheaper point doubling for curves with a = 0 (verify −5.7%, BIP32
-    derivation −7.7%, `mulBase` −9.2%).
-  - Multiples of the secp256k1 generator split each GLV half once more, at
-    2⁶⁴, against precomputed tables for `2^64 * G` (`mulBase` −29.7%, BIP32
-    derivation −24.7%). The generator tables now use width 6, so the Wasm
-    size stays the same.
-  - `Numbers.toWnaf()` recodes on 64-bit machine words instead of bignums,
-    42 times faster (verify −11.4%, BIP32 derivation −7.7%).
-  - Point additions with fewer field additions and subtractions (verify
-    −2.3%, BIP32 derivation −2.1%).
-- Update `core` from `2.6.2` to `2.7.0`.
-- Update `sha2` from `0.3.0` to `0.3.3` (HMAC-SHA256 and HMAC-SHA512 4–10%
-  faster).
-
-### Fixed
-
-- **Breaking:** `Der.decodeSignature()` rejects non-strict DER (negative or
-  non-minimal integers), as Bitcoin does since BIP66.
-- Document that `Jacobi` doesn't support curves with an even number of
-  points: on them, its arithmetic can return wrong points.
-
-## [0.2.3] - 2026-10-19
-
-### Added
-
+- Add `Numbers.toWnaf()`, which computes width-`w` NAF digits.
 - Add the `Curves.Glv` type with the GLV endomorphism parameters of secp256k1.
 
 ### Changed
 
-- Speed up `Jacobi.mul()` and `Jacobi.mulBase()` on secp256k1 with the GLV
-  endomorphism: about 34% fewer instructions for 256-bit scalars. ECDSA
-  verification and BIP32 derivation are 29–35% cheaper.
+- Speed up elliptic-curve operations: ~5x on secp256k1, ~2x on secp256r1.
+- Require moc 1.6.0 or later, which `core` 2.7.1 already requires.
+- Update `core` from `2.6.2` to `2.7.1`.
+- Update `sha2` from `0.3.0` to `0.3.4`.
 - **Breaking:** `Curves.Curve` has a new field `glv : ?Glv`. Code that
   constructs its own `Curve` values must add it (`glv = null` keeps the
   previous scalar multiplication).
+- **Breaking:** `Der.decodeSignature()` rejects non-strict DER (negative or
+  non-minimal integers), as Bitcoin does since BIP66.
+
+### Fixed
+
+- Document that `Jacobi` doesn't support curves with an even number of
+  points: on them, its arithmetic can return wrong points.
+- Document that `Ecdsa.verify()` accepts high-S signatures, which Bitcoin's
+  standardness rules and libsecp256k1 reject.
 
 ## [0.2.2] - 2026-10-16
 

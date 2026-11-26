@@ -1,13 +1,24 @@
 # Optimization log
 
 How much each optimization of the elliptic-curve code delivered, one row per
-step. Each step is a single commit, measured with `mops bench --locked` on
-the toolchain pinned in `mops.toml` (moc 2.0.0 up to step 17, moc 2.2.3
-from step 18 on; pocket-ic 15.0.0, wasm-opt with `[optimize]`). The "Δ" columns compare a step with the row above it.
+step. All of them shipped in 0.3.0. Each step is a single commit, measured
+with `mops bench --locked` on the toolchain pinned in `mops.toml` (moc 2.0.0
+up to step 17, moc 2.2.3 from step 18 on, moc 2.2.5 from step 23 on;
+pocket-ic 15.0.0, wasm-opt with `[optimize]`). The "Δ" columns compare a step
+with the row above it.
+
+Overall, compared with 0.2.2, ECDSA verification on secp256k1 takes 79.6%
+fewer instructions (4.9 times faster) and allocates 67.5% less heap, and BIP32
+derivation takes 80.7% fewer instructions (5.2 times faster). On curves
+without GLV parameters, such as secp256r1, verification takes 44.0% fewer
+instructions (1.8 times faster) and allocates 44.2% less heap. 0.2.2 measures
+the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
+(see step 18).
 
 | Step                                   | ECDSA verify |      Δ | Verify heap |      Δ | BIP32 depth 5 |      Δ | `mul`, k < 2⁵⁷ |      Δ |
 | :------------------------------------- | -----------: | -----: | ----------: | -----: | ------------: | -----: | -------------: | -----: |
-| 0.2.3 (GLV, `% p`)                     |  158_720_308 |        |    6.81 MiB |        |   521_699_275 |        |     29_921_334 |        |
+| 0.2.2 (baseline)                       |  246_258_062 |        |   10.42 MiB |        |   737_240_050 |        |     29_830_886 |        |
+| GLV endomorphism                       |  158_720_308 | −35.5% |    6.81 MiB | −34.6% |   521_699_275 | −29.2% |     29_921_334 |  +0.3% |
 | Reduction specialized to secp256k1's p |  138_177_588 | −12.9% |   11.78 MiB | +73.0% |   469_896_817 |  −9.9% |     26_035_801 | −13.0% |
 | Field arithmetic on `Nat` residues     |  127_092_370 |  −8.0% |   10.67 MiB |  −9.4% |   442_104_728 |  −5.9% |     23_711_013 |  −8.9% |
 | Width-5 wNAF, Jacobian tables          |  116_817_125 |  −8.1% |    9.78 MiB |  −8.3% |   413_335_328 |  −6.5% |     24_593_089 |  +3.7% |
@@ -28,6 +39,7 @@ from step 18 on; pocket-ic 15.0.0, wasm-opt with `[optimize]`). The "Δ" columns
 | core 2.7.0                             |   59_637_855 |     0% |    5.11 MiB |     0% |   168_252_199 |     0% |     15_738_049 |     0% |
 | Fold as t − hi·p                       |   50_168_009 | −15.9% |    3.39 MiB | −33.7% |   142_258_775 | −15.4% |     13_603_499 | −13.6% |
 | wNAF for curves without GLV            |   50_175_402 |     0% |    3.39 MiB |     0% |   142_258_830 |     0% |     13_603_510 |     0% |
+| moc 2.2.5, sha2 0.3.4, core 2.7.1      |   50_175_079 |     0% |    3.39 MiB |     0% |   142_252_190 |     0% |     13_603_510 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -46,6 +58,7 @@ above):
 | moc 2.2.3                         |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 |  +0.7% | 61_574_396 |  +0.7% |
 | Fold as t − hi·p                  |  5_608_775 | −18.4% | 22_187_390 | −14.8% | 42_718_644 | −15.0% | 52_144_098 | −15.3% |
 | wNAF for curves without GLV       |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
+| moc 2.2.5, sha2 0.3.4, core 2.7.1 |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
 
 Columns:
 
@@ -70,6 +83,16 @@ verifies a secp256k1 signature in 110_018_892 instructions with 5.41 MiB of
 heap (its own benchmark, measured without `wasm-opt`).
 
 ## Steps
+
+The **GLV endomorphism** row comes first. secp256k1 has an efficiently
+computable endomorphism φ(x, y) = (βx, y) with φ(P) = λP. `Jacobi.mul()` and
+`Jacobi.mulBase()` split a scalar k into k1 + λ·k2 with k1 and k2 of about
+128 bits each and compute k1·P + k2·φ(P) in one interleaved loop, which
+halves the number of doublings. The parameters are in the new `Curves.Glv`
+type, and `Curves.Curve` has a new field `glv : ?Glv`; curves with
+`glv = null` keep the previous multiplication. 256-bit scalar
+multiplications take about 34% fewer instructions. Scalars below 2¹²⁸ don't
+gain (the `mul` column), as they need no more doublings than one GLV half.
 
 1. **Reduction specialized to secp256k1's p.** Instead of `% p`, which is a
    bignum division, the bits above 2²⁵⁶ are folded back in using
@@ -357,6 +380,11 @@ heap (its own benchmark, measured without `wasm-opt`).
     against double-and-add on secp256r1, on secp256k1 with its GLV
     parameters removed, and exhaustively on two small curves of prime order
     (5 and 13), where table entries and sums reach the point at infinity.
+
+23. **moc 2.2.5, sha2 0.3.4, core 2.7.1.** Updating the toolchain and both
+    dependencies changes no benchmark by more than 0.01%. On secp256r1,
+    verify measures 141_771_116 instructions, against 252_959_189 in 0.2.2
+    (−44.0%).
 
 ## Tried and not adopted
 

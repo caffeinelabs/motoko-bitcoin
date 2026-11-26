@@ -1,26 +1,26 @@
 [package]
 name = "bitcoin"
-version = "0.2.3"
+version = "0.3.0"
 description = "Algorithms for bitcoin integration"
 repository = "https://github.com/caffeinelabs/motoko-bitcoin"
 keywords = [ "bitcoin" ]
 license = "Apache-2.0"
 
 [dependencies]
-core = "2.7.0"
-sha2 = "0.3.3"
+core = "2.7.1"
+sha2 = "0.3.4"
 
 [dev-dependencies]
 test = "2.1.2"
 bench-helper = "0.0.4"
 
 [toolchain]
-moc = "2.2.3"
+moc = "2.2.5"
 pocket-ic = "15.0.0"
 wasmtime = "51.0.0"
 wasm-opt = "133"
 
 [requirements]
-moc = "1.4.0"
+moc = "1.6.0"
 
 [optimize]
