@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Speed up RIPEMD-160 (`Ripemd160.hash()` and `Digest`): 34–51% fewer
-  instructions, about twice as fast for long inputs.
+  instructions, about 50% fewer for 1 KiB inputs.
 
 ## [0.3.0] - 2026-11-26
 
