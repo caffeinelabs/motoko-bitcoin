@@ -51,8 +51,16 @@ jobs:
       - name: Make sure wasm-opt is installed
         run: mops toolchain bin wasm-opt
 
+      - name: Make sure wasmtime is installed
+        run: mops toolchain bin wasmtime
+
       - name: Run tests
         run: mops test --locked
+
+      # The interpreter and compiled code use different bignum
+      # implementations, so also run the tests as compiled Wasm.
+      - name: Run tests compiled (wasmtime)
+        run: mops test --locked --mode wasi
 
       - name: Run benchmarks
         run: mops bench --locked

@@ -26,24 +26,26 @@ from step 18 on; pocket-ic 15.0.0, wasm-opt with `[optimize]`). The "Δ" columns
 | moc 2.2.3                              |   59_637_855 |  +0.7% |    5.11 MiB |     0% |   168_290_299 |  +0.7% |     15_738_049 |  +0.6% |
 | sha2 0.3.3                             |   59_637_855 |     0% |    5.11 MiB |     0% |   168_252_199 |     0% |     15_738_049 |     0% |
 | core 2.7.0                             |   59_637_855 |     0% |    5.11 MiB |     0% |   168_252_199 |     0% |     15_738_049 |     0% |
-| wNAF for curves without GLV            |   59_637_288 |     0% |    5.11 MiB |     0% |   168_252_204 |     0% |     15_738_353 |     0% |
+| Fold as t − hi·p                       |   50_168_009 | −15.9% |    3.39 MiB | −33.7% |   142_258_775 | −15.4% |     13_603_499 | −13.6% |
+| wNAF for curves without GLV            |   50_175_402 |     0% |    3.39 MiB |     0% |   142_258_830 |     0% |     13_603_510 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
 above):
 
-| Step                              | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |     Δ |   `mulAdd` |      Δ |
-| :-------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | ----: | ---------: | -----: |
-| Precomputed tables for G          | 24_419_901 |        | 56_959_886 |        | 59_227_618 |       | 73_905_529 |        |
-| Square root by addition chain     |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 | −0.1% | 73_853_875 |  −0.1% |
-| G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 | −0.3% | 73_652_493 |  −0.3% |
-| Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 | −7.0% | 69_493_523 |  −5.6% |
-| Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 | +0.7% | 69_657_567 |  +0.2% |
-| Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 | +0.4% | 69_958_715 |  +0.4% |
-| wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 | −8.8% | 62_263_255 | −11.0% |
-| Leaner addition formulas          |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 | −1.3% | 61_152_465 |  −1.8% |
-| moc 2.2.3                         |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 | +0.7% | 61_574_396 |  +0.7% |
-| wNAF for curves without GLV       |  6_871_444 |     0% | 26_028_211 |     0% | 50_263_742 |    0% | 61_574_784 |     0% |
+| Step                              | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |      Δ |   `mulAdd` |      Δ |
+| :-------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | -----: | ---------: | -----: |
+| Precomputed tables for G          | 24_419_901 |        | 56_959_886 |        | 59_227_618 |        | 73_905_529 |        |
+| Square root by addition chain     |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 |  −0.1% | 73_853_875 |  −0.1% |
+| G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 |  −0.3% | 73_652_493 |  −0.3% |
+| Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 |  −7.0% | 69_493_523 |  −5.6% |
+| Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 |  +0.7% | 69_657_567 |  +0.2% |
+| Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 |  +0.4% | 69_958_715 |  +0.4% |
+| wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 |  −8.8% | 62_263_255 | −11.0% |
+| Leaner addition formulas          |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 |  −1.3% | 61_152_465 |  −1.8% |
+| moc 2.2.3                         |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 |  +0.7% | 61_574_396 |  +0.7% |
+| Fold as t − hi·p                  |  5_608_775 | −18.4% | 22_187_390 | −14.8% | 42_718_644 | −15.0% | 52_144_098 | −15.3% |
+| wNAF for curves without GLV       |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
 
 Columns:
 
@@ -327,7 +329,20 @@ heap (its own benchmark, measured without `wasm-opt`).
 20. **core 2.7.0.** Updating the `core` dependency from 2.6.2 to 2.7.0
     changes none of the 188 benchmark cells, instructions or heap.
 
-21. **wNAF for curves without GLV.** Curves with `glv = null` (every user-defined `Curve`, and
+21. **Fold as t − hi·p.** Each of the two folds in the secp256k1 reduction
+    computed hi = t >> 256, lo = t − (hi << 256) and lo + hi·(2³² + 977):
+    a shift, a subtraction, a small multiplication and an addition, each of
+    which allocates a new bignum. Since 2²⁵⁶ − (2³² + 977) = p, the same
+    value is t − hi·p: one multiplication and one subtraction. The result
+    is identical, and the bound after two folds is unchanged
+    (below 2²⁵⁶ + 2⁶⁷ < 2p). Per `Field.mul` this saves about 4.7k
+    instructions and 0.9 KiB of heap (from decompression, about 270
+    multiplications), and it removes the two left shifts that moc 2.2.x
+    made more expensive (step 18). Every secp256k1 operation is 13–18%
+    cheaper and allocates 28–39% less; secp256r1 reduces with `% p` and
+    doesn't change.
+
+22. **wNAF for curves without GLV.** Curves with `glv = null` (every user-defined `Curve`, and
     secp256r1 in the tests) multiplied with width-2 NAF, about one addition
     per three bits, and `mulAdd` fell back to two separate multiplications
     plus an addition, so ECDSA verification did 512 doublings. Now they use
