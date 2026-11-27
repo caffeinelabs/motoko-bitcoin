@@ -44,6 +44,7 @@ the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
 | `Field.pow` by machine words           |   50_204_473 |     0% |    3.39 MiB |     0% |   142_268_903 |  −0.1% |     13_611_609 |     0% |
 | Doubling for a = −3                    |   50_204_349 |     0% |    3.39 MiB |     0% |   142_268_593 |     0% |     13_611_556 |     0% |
 | Shared-Z tables for Q                  |   47_839_854 |  −4.7% |    3.24 MiB |  −4.4% |   142_127_226 |  −0.1% |     13_619_009 |  +0.1% |
+| Width-8 tables for G                   |   45_511_867 |  −4.9% |    3.09 MiB |  −4.6% |   132_691_633 |  −6.6% |     13_066_187 |  −4.1% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -67,6 +68,7 @@ above):
 | `Field.pow` by machine words       |  5_598_658 |  −0.3% | 22_200_240 |     0% | 42_750_778 |     0% | 52_180_849 |     0% |
 | Doubling for a = −3                |  5_598_658 |     0% | 22_200_179 |     0% | 42_750_653 |     0% | 52_180_724 |     0% |
 | Shared-Z tables for Q              |  5_598_658 |     0% | 22_148_304 |  −0.2% | 38_908_267 |  −9.0% | 49_857_860 |  −4.5% |
+| Width-8 tables for G               |  5_598_658 |     0% | 20_553_487 |  −7.2% | 38_951_869 |  +0.1% | 47_526_084 |  −4.7% |
 
 Columns:
 
@@ -447,6 +449,32 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
     extra subtraction, at most 3.5% of the instructions, and because the
     secp256k1 prime is so close to 2²⁵⁶ only a bound of 2p would save a
     part of that, at the cost of extra checks at every equality test.
+
+28. **Width-8 tables for G.** Steps 11–27 made everything except the
+    digits of G cheaper, so a wider window for the four precomputed G
+    tables pays more than at step 11. The tables grow from 16 to 64 points
+    each, regenerated with `scripts/secp256k1_generator_table.py 8`.
+    Measured against step 27 (canister calling `Jacobi.mulBase` on
+    secp256k1, Wasm after `wasm-opt -O3`):
+
+    | Tables      | Points |              Wasm |  `mulBase` |     Verify | BIP32 depth 5 |
+    | :---------- | -----: | ----------------: | ---------: | ---------: | ------------: |
+    | 4 × width 6 |     64 |         205_548 B | 22_148_304 | 47_839_854 |   142_127_226 |
+    | 4 × width 7 |    128 | +21.1 KB (+10.3%) | 20_692_855 | 46_786_729 |   137_135_090 |
+    | 4 × width 8 |    256 | +63.4 KB (+30.8%) | 20_553_487 | 45_511_867 |   132_691_633 |
+
+    Width 8: verify −4.9%, heap −4.6%; `mulAdd` −4.7%, `mulBase` −7.2%,
+    BIP32 depth 5 −6.6%. `mul` of a point other than G doesn't change
+    (+0.1%). `mulBase` with a 57-bit scalar gains less (−4.1%, width 7:
+    −4.7%), as its high pieces are zero.
+
+    The tables are not static data: moc builds them with code that runs
+    when the module is initialized, at install and at every upgrade, so
+    the whole size increase is in the code section. That code costs
+    about 11k instructions at width 6 and 40k at width 8 (wasmtime fuel
+    of a WASI program that only imports the module), and the tables keep
+    about 3.8 KiB (width 6) or 15.0 KiB (width 8) of heap for the
+    lifetime of the canister.
 
 ## Tried and not adopted
 

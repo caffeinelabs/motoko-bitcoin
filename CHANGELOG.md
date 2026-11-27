@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Speed up multiplication of points other than the secp256k1 generator
   (secp256k1: `Jacobi.mul()` −9.0%, `Jacobi.mulAdd()` −4.5%, ECDSA verification
   −4.7%).
+- Wider precomputed tables for the secp256k1 generator: ECDSA verification
+  −4.9%, `Jacobi.mulBase()` −7.2%, BIP32 derivation −6.6%. The Wasm module
+  grows by about 63 KB.
 
 ## [0.3.0] - 2026-11-26
 
