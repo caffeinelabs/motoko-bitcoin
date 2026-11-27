@@ -463,3 +463,11 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
   Dropped: the gain is too small for the extra code. Only width 5 was
   measured. Affine tables come for free in a precomputed table for G,
   because its entries are constants.
+
+- **Other wNAF widths for Q** (after step 27). With shared-Z tables, the
+  table of a point other than the generator is cheaper to build, so a wider
+  window looked worthwhile. It isn't: a GLV half has only about 128 bits, so
+  doubling the table costs more than the few additions it saves. Against
+  width 5, on secp256k1: width 6 verify +3.3%, `mul` +6.0%, `mulAdd` +3.3%;
+  width 7 verify +15.4%, `mul` +19.0%; width 4 verify +0.5%, `mul` +3.0%,
+  but `mul` with a 57-bit scalar −6.0%. Width 5 stays.
