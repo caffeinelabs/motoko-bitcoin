@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add `Field.modulus()` and `Field.mulMod()`, modular multiplication with
+  Barrett reduction.
+
+### Changed
+
+- Speed up RIPEMD-160 (`Ripemd160.hash()` and `Digest`): 34–51% fewer
+  instructions, about 50% fewer for 1 KiB inputs.
+- Speed up elliptic-curve operations on curves other than secp256k1, such as
+  secp256r1, with Barrett reduction (ECDSA verification −28.7%).
+- `Field.pow()` reads the exponent 64 bits at a time (public key decompression
+  on curves other than secp256k1, such as secp256r1, −48.5%).
+- A cheaper point doubling for curves with a = −3, such as secp256r1 (verify
+  −9.8%, `mul` −11.5%).
+- Speed up multiplication of points other than the secp256k1 generator
+  (secp256k1: `Jacobi.mul()` −9.0%, `Jacobi.mulAdd()` −4.5%, ECDSA verification
+  −4.7%).
+- Speed up elliptic-curve operations on curves without GLV parameters, such
+  as secp256r1, with affine tables (ECDSA verification −4.4%, `mulAdd` −3.9%).
+
 ## [0.3.0] - 2026-11-26
 
 ### Added

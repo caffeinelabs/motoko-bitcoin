@@ -40,25 +40,35 @@ the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
 | Fold as t − hi·p                       |   50_168_009 | −15.9% |    3.39 MiB | −33.7% |   142_258_775 | −15.4% |     13_603_499 | −13.6% |
 | wNAF for curves without GLV            |   50_175_402 |     0% |    3.39 MiB |     0% |   142_258_830 |     0% |     13_603_510 |     0% |
 | moc 2.2.5, sha2 0.3.4, core 2.7.1      |   50_175_079 |     0% |    3.39 MiB |     0% |   142_252_190 |     0% |     13_603_510 |     0% |
+| Barrett reduction for other primes     |   50_204_479 |  +0.1% |    3.39 MiB |     0% |   142_341_298 |  +0.1% |     13_611_298 |  +0.1% |
+| `Field.pow` by machine words           |   50_204_473 |     0% |    3.39 MiB |     0% |   142_268_903 |  −0.1% |     13_611_609 |     0% |
+| Doubling for a = −3                    |   50_204_349 |     0% |    3.39 MiB |     0% |   142_268_593 |     0% |     13_611_556 |     0% |
+| Shared-Z tables for Q                  |   47_839_854 |  −4.7% |    3.24 MiB |  −4.4% |   142_127_226 |  −0.1% |     13_619_009 |  +0.1% |
+| Affine tables on a ≠ 0 curves          |   47_839_447 |     0% |    3.24 MiB |     0% |   142_126_776 |     0% |     13_619_236 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
 above):
 
-| Step                              | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |      Δ |   `mulAdd` |      Δ |
-| :-------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | -----: | ---------: | -----: |
-| Precomputed tables for G          | 24_419_901 |        | 56_959_886 |        | 59_227_618 |        | 73_905_529 |        |
-| Square root by addition chain     |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 |  −0.1% | 73_853_875 |  −0.1% |
-| G tables in `mul` and `mulBase`   |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 |  −0.3% | 73_652_493 |  −0.3% |
-| Doubling formula for a = 0        |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 |  −7.0% | 69_493_523 |  −5.6% |
-| Split G's scalar at 2⁶⁴ (width 6) |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 |  +0.7% | 69_657_567 |  +0.2% |
-| Keep the field helpers private    |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 |  +0.4% | 69_958_715 |  +0.4% |
-| wNAF recoding on `Nat64` words    |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 |  −8.8% | 62_263_255 | −11.0% |
-| Leaner addition formulas          |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 |  −1.3% | 61_152_465 |  −1.8% |
-| moc 2.2.3                         |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 |  +0.7% | 61_574_396 |  +0.7% |
-| Fold as t − hi·p                  |  5_608_775 | −18.4% | 22_187_390 | −14.8% | 42_718_644 | −15.0% | 52_144_098 | −15.3% |
-| wNAF for curves without GLV       |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
-| moc 2.2.5, sha2 0.3.4, core 2.7.1 |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
+| Step                               | Decompress |      Δ |  `mulBase` |      Δ |      `mul` |      Δ |   `mulAdd` |      Δ |
+| :--------------------------------- | ---------: | -----: | ---------: | -----: | ---------: | -----: | ---------: | -----: |
+| Precomputed tables for G           | 24_419_901 |        | 56_959_886 |        | 59_227_618 |        | 73_905_529 |        |
+| Square root by addition chain      |  6_772_845 | −72.3% | 56_945_858 |     0% | 59_170_259 |  −0.1% | 73_853_875 |  −0.1% |
+| G tables in `mul` and `mulBase`    |  6_773_162 |     0% | 45_687_955 | −19.8% | 58_969_426 |  −0.3% | 73_652_493 |  −0.3% |
+| Doubling formula for a = 0         |  6_773_162 |     0% | 41_492_544 |  −9.2% | 54_834_056 |  −7.0% | 69_493_523 |  −5.6% |
+| Split G's scalar at 2⁶⁴ (width 6)  |  6_773_162 |     0% | 29_150_343 | −29.7% | 55_206_258 |  +0.7% | 69_657_567 |  +0.2% |
+| Keep the field helpers private     |  6_826_285 |  +0.8% | 29_273_390 |  +0.4% | 55_446_920 |  +0.4% | 69_958_715 |  +0.4% |
+| wNAF recoding on `Nat64` words     |  6_826_080 |     0% | 26_491_277 |  −9.5% | 50_583_269 |  −8.8% | 62_263_255 | −11.0% |
+| Leaner addition formulas           |  6_826_397 |     0% | 25_855_869 |  −2.4% | 49_925_359 |  −1.3% | 61_152_465 |  −1.8% |
+| moc 2.2.3                          |  6_871_444 |  +0.7% | 26_028_224 |  +0.7% | 50_263_358 |  +0.7% | 61_574_396 |  +0.7% |
+| Fold as t − hi·p                   |  5_608_775 | −18.4% | 22_187_390 | −14.8% | 42_718_644 | −15.0% | 52_144_098 | −15.3% |
+| wNAF for curves without GLV        |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
+| moc 2.2.5, sha2 0.3.4, core 2.7.1  |  5_608_458 |     0% | 22_187_401 |     0% | 42_725_703 |     0% | 52_151_180 |     0% |
+| Barrett reduction for other primes |  5_613_450 |  +0.1% | 22_200_246 |  +0.1% | 42_750_784 |  +0.1% | 52_180_855 |  +0.1% |
+| `Field.pow` by machine words       |  5_598_658 |  −0.3% | 22_200_240 |     0% | 42_750_778 |     0% | 52_180_849 |     0% |
+| Doubling for a = −3                |  5_598_658 |     0% | 22_200_179 |     0% | 42_750_653 |     0% | 52_180_724 |     0% |
+| Shared-Z tables for Q              |  5_598_658 |     0% | 22_148_304 |  −0.2% | 38_908_267 |  −9.0% | 49_857_860 |  −4.5% |
+| Affine tables on a ≠ 0 curves      |  5_598_658 |     0% | 22_148_214 |     0% | 38_908_293 |     0% | 49_857_774 |     0% |
 
 Columns:
 
@@ -386,6 +396,78 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
     verify measures 141_771_116 instructions, against 252_959_189 in 0.2.2
     (−44.0%).
 
+24. **Barrett reduction for other primes.** Field multiplications for any
+    prime other than secp256k1's reduced the product with `% p`, a bignum
+    division. They now use Barrett reduction (`Field.mulMod`): two
+    multiplications by precomputed constants, two shifts and at most two
+    subtractions. `Field.modulus(p)` computes the constants once per
+    operation (about one division) and `Jacobi` passes them down. They are
+    a tuple because a record's fields are looked up by hash at runtime: as
+    a record, secp256k1 lost 0.3%, as a tuple 0.05%. `Field.pow` uses it
+    too. On secp256r1: verify 141_771_116 → 101_067_334 instructions
+    (−28.7%); `mulAdd` −28.3%, `mul` −28.0%, `mulBase` −28.4%,
+    decompression −17.6%. Heap changes by less than 1%: the temporaries of
+    Barrett reduction take about as much as the division's. secp256k1
+    doesn't change (+0.06%).
+
+25. **`Field.pow` by machine words.** `Field.pow` built the exponent's bits
+    with `Numbers.toBinaryReversed`, one bignum `% 2` and `/ 2` per bit and
+    a `List` of `Bool`s: 6.3M of the 12.3M instructions of a square root on
+    secp256r1, more than the 255 squarings themselves. It now splits the
+    exponent into 64-bit words and tests the bits of each word with `Nat64`
+    operations. Square roots on secp256k1 use an addition chain and don't
+    call `pow`. On secp256r1: decompression 13_091_612 → 6_737_983
+    instructions (−48.5%), heap 693 → 389 KiB (−43.9%). Decompression on
+    secp256k1 gets 0.3% cheaper (the `x.pow(3)` in the curve equation);
+    everything else changes by at most 0.05%.
+
+26. **Doubling for a = −3.** For a ≠ 0, doubling computed M = 3·X² + a·Z⁴
+    with three squarings and a multiplication by a. For a = −3, which
+    secp256r1 and the other NIST curves use, M = 3·(X − Z²)·(X + Z²): one
+    squaring and one multiplication. `doDouble` checks `a + 3 == p`. On
+    secp256r1: verify 101_067_328 → 91_205_243 instructions (−9.8%), heap
+    6.09 → 5.59 MiB (−8.2%); `mul` −11.5%, `mulBase` −11.8%, `mulAdd`
+    −9.5%. secp256k1 doesn't change (+0.01%).
+
+27. **Shared-Z tables for Q.** The table of odd multiples of a point Q
+    that isn't the generator had a different Z per entry, so each addition
+    in the main loop was a full addition (11M + 5S). The table is now built
+    as in libsecp256k1, without an inversion: 2Q first, the other entries
+    by mixed additions on the isomorphic curve on which 2Q is affine, and a
+    backward pass that brings all of them to one shared Z. On curves with
+    a = 0 the main loop then runs on the isomorphic curve on which those
+    entries are affine, so they take a mixed addition (8M + 3S); the
+    affine generator tables have Z = 1/zg there, which costs one extra
+    multiplication per addition (libsecp256k1's `gej_add_zinv_var`, now a
+    parameter of the mixed addition). `mul` −9.0%, `mulAdd` −4.5%, verify
+    −4.7%; `mulBase` and BIP32 derivation don't change. A first version
+    that also rescaled the table of a second non-generator point, used a
+    separate copy of the loop for `mulBase` and a separate addition for
+    the generator tables saved 0.6–0.7% more, with 179 instead of 85 added
+    lines. Lazy reduction was measured first and not adopted: in one
+    `mulAdd`, 1_075 of 2_171 field additions and subtractions take the
+    extra subtraction, at most 3.5% of the instructions, and because the
+    secp256k1 prime is so close to 2²⁵⁶ only a bound of 2p would save a
+    part of that, at the cost of extra checks at every equality test.
+
+28. **Affine tables on a ≠ 0 curves.** On curves without GLV parameters,
+    such as secp256r1, the tables of odd multiples had a different Z per
+    entry, so every addition in the main loop was a full addition. They
+    are now built with `coZOddMultiples` (step 27) and share one Z, and
+    `wnafSum` converts all such tables of one operation to affine
+    coordinates with a single field inversion (Montgomery's trick), so
+    the loop takes mixed additions. On a = 0 curves without GLV
+    parameters the shared Z takes the isomorphic-curve path of step 27
+    instead. On secp256r1: verify 91_234_007 → 87_222_783 instructions
+    (−4.4%), heap 5.59 → 5.42 MiB (−3.0%); `mulAdd` −3.9%, `mulBase`
+    −1.9%, `mul` −1.0%. secp256k1 doesn't change.
+
+    Measured first: one inversion per table instead of one for all
+    (verify −2.3%, `mulAdd` −1.4%), and keeping the shared-Z tables
+    Jacobian with Z² and Z³ computed once per table (verify −2.1%,
+    `mulAdd` −2.0%). Shared-Z tables with general additions alone were
+    1.9% slower.
+
 ## Tried and not adopted
 
 - **Affine wNAF tables** (after step 3). Converting each table to affine
@@ -401,3 +483,11 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
   Dropped: the gain is too small for the extra code. Only width 5 was
   measured. Affine tables come for free in a precomputed table for G,
   because its entries are constants.
+
+- **Other wNAF widths for Q** (after step 27). With shared-Z tables, the
+  table of a point other than the generator is cheaper to build, so a wider
+  window looked worthwhile. It isn't: a GLV half has only about 128 bits, so
+  doubling the table costs more than the few additions it saves. Against
+  width 5, on secp256k1: width 6 verify +3.3%, `mul` +6.0%, `mulAdd` +3.3%;
+  width 7 verify +15.4%, `mul` +19.0%; width 4 verify +0.5%, `mul` +3.0%,
+  but `mul` with a 57-bit scalar −6.0%. Width 5 stays.

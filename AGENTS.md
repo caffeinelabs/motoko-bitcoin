@@ -6,9 +6,9 @@ transactions, BIP32, ECDSA, and hashing), published to Mops as
 
 ## Setup
 
-- Motoko toolchain versions (`moc`, `pocket-ic`, `wasmtime`, `wasm-opt`) are
-  pinned under `[toolchain]` in `mops.toml`. Don't assume system-installed
-  versions. `[requirements] moc` is the minimum floor for users of the package.
+- Motoko toolchain versions (`moc`, `pocket-ic`, `wasmtime`, `wasm-opt`,
+  `mo-fmt`) are pinned under `[toolchain]` in `mops.toml`. Don't assume
+  system-installed versions. `[requirements] moc` is the minimum floor for users of the package.
 - To install dependencies and the toolchain, run `mops install --locked`.
 
 ## Build, test, and format
@@ -16,10 +16,9 @@ transactions, BIP32, ECDSA, and hashing), published to Mops as
 - `mops test` runs the tests in `test/`.
 - `mops bench` runs the benchmarks in `bench/`. The `[optimize]` section in
   `mops.toml` runs `wasm-opt` on them.
-- To format, run
-  `npx prettier --plugin prettier-plugin-motoko --write '**/*.{mo,json,md}'`
-  after `npm install --no-save prettier prettier-plugin-motoko`. CI checks the
-  same globs.
+- To format, run `mops format` (Motoko, with `mo-fmt` pinned in `mops.toml`
+  and configured in `mo-fmt.toml`) and `npx -y prettier --write '**/*.{json,md}'`
+  (Markdown and JSON). CI checks both.
 
 ## Layout
 
