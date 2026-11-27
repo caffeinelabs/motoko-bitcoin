@@ -74,7 +74,7 @@ module {
         // Signature s component size.
         + 1
         // Signature s component.
-        + sData.size(),
+        + sData.size()
       )
     );
     // DER sequence identifier.

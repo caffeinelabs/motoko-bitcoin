@@ -79,7 +79,14 @@ jobs:
         with:
           node-version: latest
 
-      - name: Prettier Check
-        run: |
-          npm install prettier prettier-plugin-motoko --no-save
-          npx -y prettier --plugin prettier-plugin-motoko --check '**/*.{mo,json,md}'
+      - name: Install mops
+        uses: caffeinelabs/setup-mops@v1
+
+      - name: Make sure mo-fmt is installed
+        run: mops toolchain bin mo-fmt
+
+      - name: Check Motoko formatting
+        run: mops format --check
+
+      - name: Check Markdown and JSON formatting
+        run: npx -y prettier --check '**/*.{json,md}'
