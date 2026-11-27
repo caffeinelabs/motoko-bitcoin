@@ -44,6 +44,7 @@ the same on moc 2.0.0, 2.2.3 and 2.2.5, since its code does no bignum shifts
 | `Field.pow` by machine words           |   50_204_473 |     0% |    3.39 MiB |     0% |   142_268_903 |  −0.1% |     13_611_609 |     0% |
 | Doubling for a = −3                    |   50_204_349 |     0% |    3.39 MiB |     0% |   142_268_593 |     0% |     13_611_556 |     0% |
 | Shared-Z tables for Q                  |   47_839_854 |  −4.7% |    3.24 MiB |  −4.4% |   142_127_226 |  −0.1% |     13_619_009 |  +0.1% |
+| Affine tables on a ≠ 0 curves          |   47_839_447 |     0% |    3.24 MiB |     0% |   142_126_776 |     0% |     13_619_236 |     0% |
 
 Starting with "Precomputed tables for G", `bench/ec_ops.bench.mo`
 also measures full-size operations on secp256k1 (instructions; Δ vs the row
@@ -67,6 +68,7 @@ above):
 | `Field.pow` by machine words       |  5_598_658 |  −0.3% | 22_200_240 |     0% | 42_750_778 |     0% | 52_180_849 |     0% |
 | Doubling for a = −3                |  5_598_658 |     0% | 22_200_179 |     0% | 42_750_653 |     0% | 52_180_724 |     0% |
 | Shared-Z tables for Q              |  5_598_658 |     0% | 22_148_304 |  −0.2% | 38_908_267 |  −9.0% | 49_857_860 |  −4.5% |
+| Affine tables on a ≠ 0 curves      |  5_598_658 |     0% | 22_148_214 |     0% | 38_908_293 |     0% | 49_857_774 |     0% |
 
 Columns:
 
@@ -447,6 +449,24 @@ gain (the `mul` column), as they need no more doublings than one GLV half.
     extra subtraction, at most 3.5% of the instructions, and because the
     secp256k1 prime is so close to 2²⁵⁶ only a bound of 2p would save a
     part of that, at the cost of extra checks at every equality test.
+
+28. **Affine tables on a ≠ 0 curves.** On curves without GLV parameters,
+    such as secp256r1, the tables of odd multiples had a different Z per
+    entry, so every addition in the main loop was a full addition. They
+    are now built with `coZOddMultiples` (step 27) and share one Z, and
+    `wnafSum` converts all such tables of one operation to affine
+    coordinates with a single field inversion (Montgomery's trick), so
+    the loop takes mixed additions. On a = 0 curves without GLV
+    parameters the shared Z takes the isomorphic-curve path of step 27
+    instead. On secp256r1: verify 91_234_007 → 87_222_783 instructions
+    (−4.4%), heap 5.59 → 5.42 MiB (−3.0%); `mulAdd` −3.9%, `mulBase`
+    −1.9%, `mul` −1.0%. secp256k1 doesn't change.
+
+    Measured first: one inversion per table instead of one for all
+    (verify −2.3%, `mulAdd` −1.4%), and keeping the shared-Z tables
+    Jacobian with Z² and Z³ computed once per table (verify −2.1%,
+    `mulAdd` −2.0%). Shared-Z tables with general additions alone were
+    1.9% slower.
 
 ## Tried and not adopted
 

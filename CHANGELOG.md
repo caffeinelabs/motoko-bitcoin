@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Speed up multiplication of points other than the secp256k1 generator
   (secp256k1: `Jacobi.mul()` −9.0%, `Jacobi.mulAdd()` −4.5%, ECDSA verification
   −4.7%).
+- Speed up elliptic-curve operations on curves without GLV parameters, such
+  as secp256r1, with affine tables (ECDSA verification −4.4%, `mulAdd` −3.9%).
 
 ## [0.3.0] - 2026-11-26
 

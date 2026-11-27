@@ -393,7 +393,14 @@ module {
       };
       case null {
         if (scalar == 0) return ?[];
-        let ?table = oddMultiples(x, y, curve) else return null;
+        let size = 2 ** (WNAF_WINDOW - 2 : Nat);
+        let table = switch (coZOddMultiples(x, y, size, curve.a, Field.modulus(curve.p))) {
+          case (?table) table;
+          case null {
+            let ?table = oddMultiples(x, y, curve) else return null;
+            table;
+          };
+        };
         ?[{
           digits = Numbers.toWnaf(scalar, WNAF_WINDOW);
           table;
@@ -401,6 +408,43 @@ module {
         }];
       };
     };
+  };
+
+  // Converts the tables of `terms` whose entries share one Z != 1 to affine
+  // coordinates, with one field inversion for all of them (Montgomery's
+  // trick). Returns `terms` unchanged if there are none.
+  func affineTables(terms : [WnafTerm], m : Modulus) : [WnafTerm] {
+    let n = terms.size();
+    let zs = terms.map<WnafTerm, Nat>(
+      func(term) {
+        let z = term.table[0].2;
+        if (z != 1 and term.table.all(func(q : Coords) : Bool = q.2 == z)) z else 1;
+      }
+    );
+    if (zs.all(func(z : Nat) : Bool = z == 1)) return terms;
+    // pre[i] = zs[0] * ... * zs[i - 1]
+    let pre = VarArray.repeat<Nat>(1, n + 1);
+    for (i in Nat.range(0, n)) pre[i + 1] := fmul(pre[i], zs[i], m);
+    let ?inv = Field.inverse(pre[n], m.0) else return terms;
+    let zis = VarArray.repeat<Nat>(1, n);
+    var acc = inv;
+    for (i in Nat.rangeByInclusive(n - 1, 0, -1)) {
+      zis[i] := fmul(acc, pre[i], m);
+      acc := fmul(acc, zs[i], m);
+    };
+    Array.tabulate<WnafTerm>(
+      n,
+      func(i) {
+        if (zs[i] == 1) return terms[i];
+        let zi2 = fsqr(zis[i], m);
+        let zi3 = fmul(zi2, zis[i], m);
+        {
+          terms[i] with table = terms[i].table.map<Coords, Coords>(
+            func(q) = (fmul(q.0, zi2, m), fmul(q.1, zi3, m), 1)
+          )
+        };
+      },
+    );
   };
 
   // Computes the sum of all `terms` with a Straus/Shamir-style interleaved
@@ -412,8 +456,11 @@ module {
   // curve constants, the loop runs on the isomorphic curve on which the
   // entries with the shared Z zg != 1 of `coZOddMultiples` are affine; there
   // affine entries have Z = 1 / zg, and the result's Z is multiplied by zg.
-  func wnafSum(terms : [WnafTerm], curve : Curves.Curve) : Point {
+  func wnafSum(terms0 : [WnafTerm], curve : Curves.Curve) : Point {
     let (a, m) = (curve.a, Field.modulus(curve.p));
+    // On curves with a != 0, tables with one shared Z become affine, with one
+    // inversion for all of them.
+    let terms = if (a == 0) terms0 else affineTables(terms0, m);
     var len = 0;
     for (term in terms.values()) {
       if (term.digits.size() > len) len := term.digits.size();
